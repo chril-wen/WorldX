@@ -7,6 +7,7 @@ import type { WorldTimeInfo, TimelineMeta } from "../../types/api";
 import { apiClient } from "../services/api-client";
 import type { WorldInfo, GeneratedWorldSummary } from "../services/api-client";
 import { GodPanel } from "./GodPanel";
+import { AdvancedPanel } from "./AdvancedPanel";
 import { SandboxChatPanel } from "./SandboxChatPanel";
 import { TimelineManagerModal } from "./TimelineManagerModal";
 import { LanguageToggle } from "../components/LanguageToggle";
@@ -65,6 +66,7 @@ export function TopBar({
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [isSwitchingWorld, setIsSwitchingWorld] = useState(false);
   const [godPanelOpen, setGodPanelOpen] = useState(false);
+  const [advancedPanelOpen, setAdvancedPanelOpen] = useState(false);
   const [sandboxChatOpen, setSandboxChatOpen] = useState(false);
   const [showPauseToast, setShowPauseToast] = useState(false);
   const [isChangingTickGranularity, setIsChangingTickGranularity] = useState(false);
@@ -471,6 +473,14 @@ export function TopBar({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button onClick={() => navigate("/timeline")} style={chipBtnStyle(false)}>{t("topbar.eventLog")}</button>
           <button
+            onClick={() => { setAdvancedPanelOpen(true); pauseWorldIfNeeded(); }}
+            disabled={inReplayMode}
+            style={{ ...chipBtnStyle(advancedPanelOpen), opacity: inReplayMode ? 0.4 : 1, cursor: inReplayMode ? "not-allowed" : "pointer" }}
+            title={t("topbar.advancedTitle")}
+          >
+            {t("topbar.advanced")}
+          </button>
+          <button
             onClick={() => setGodPanelOpen(true)}
             disabled={inReplayMode}
             style={{ ...chipBtnStyle(godPanelOpen), opacity: inReplayMode ? 0.4 : 1, cursor: inReplayMode ? "not-allowed" : "pointer" }}
@@ -553,6 +563,17 @@ export function TopBar({
 
       {godPanelOpen && typeof document !== "undefined"
         ? createPortal(<GodPanel onClose={() => setGodPanelOpen(false)} />, document.body)
+        : null}
+      {advancedPanelOpen && typeof document !== "undefined"
+        ? createPortal(
+            <AdvancedPanel
+              onClose={() => setAdvancedPanelOpen(false)}
+              worldId={worldInfo?.currentWorldId ?? null}
+              timelineId={worldInfo?.currentTimelineId ?? null}
+              simBusy={isBusy}
+            />,
+            document.body,
+          )
         : null}
       {sandboxChatOpen && typeof document !== "undefined"
         ? createPortal(<SandboxChatPanel onClose={() => setSandboxChatOpen(false)} />, document.body)

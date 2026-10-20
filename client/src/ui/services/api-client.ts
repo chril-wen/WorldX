@@ -116,6 +116,36 @@ export interface CreateJobSnapshot {
   error: string | null;
 }
 
+export interface ModelConfigResponse {
+  roles: {
+    role: string;
+    host: string;
+    model: string;
+    provider?: string;
+    hasApiKey: boolean;
+  }[];
+}
+
+export interface GlobalStateEntry {
+  key: string;
+  value: string;
+}
+
+export interface LocationState {
+  location: { id: string; name: string; description?: string };
+  objects: {
+    objectId: string;
+    state: string;
+    stateDescription?: string;
+    currentUsers: string[];
+  }[];
+  characters: {
+    id: string;
+    name: string;
+    action: string | null;
+  }[];
+}
+
 export class JobConflictError extends Error {
   activeJobId: string;
   constructor(message: string, activeJobId: string) {
@@ -140,6 +170,18 @@ export const apiClient = {
 
   getLocations(): Promise<LocationInfo[]> {
     return fetchJSON("/world/locations");
+  },
+
+  getLocationState(locationId: string): Promise<LocationState> {
+    return fetchJSON(`/world/locations/${encodeURIComponent(locationId)}/state`);
+  },
+
+  getGlobalState(): Promise<GlobalStateEntry[]> {
+    return fetchJSON("/world/global-state");
+  },
+
+  getModelConfig(): Promise<ModelConfigResponse> {
+    return fetchJSON("/world/model-config");
   },
 
   getCharacters(): Promise<CharacterInfo[]> {
@@ -205,6 +247,28 @@ export const apiClient = {
 
   simulateDay(): Promise<{ ok: boolean; gameTime: WorldTimeInfo; eventCount: number }> {
     return postJSON("/simulation/day");
+  },
+
+  simulateDays(count: number): Promise<{
+    ok: boolean;
+    paused?: boolean;
+    gameTime: WorldTimeInfo;
+    eventCount: number;
+    ticksCompleted?: number;
+  }> {
+    return postJSON("/simulation/days", { count });
+  },
+
+  pauseSimulation(): Promise<{ ok: boolean; activeSimulationTicks?: number }> {
+    return postJSON("/simulation/pause");
+  },
+
+  getSimulationStatus(): Promise<{
+    status: "idle" | "running" | "paused";
+    gameTime: WorldTimeInfo;
+    progress: { current: number; total: number } | null;
+  }> {
+    return fetchJSON("/simulation/status");
   },
 
   switchWorld(worldId: string): Promise<{

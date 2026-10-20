@@ -207,6 +207,30 @@ router.get("/locations/:id/state", (req, res) => {
   });
 });
 
+// Read-only view of the model roles from .env. Never returns API keys, only whether one is set.
+const MODEL_ROLES = ["ORCHESTRATOR", "IMAGE_GEN", "VISION", "SIMULATION"] as const;
+
+router.get("/model-config", (_req, res) => {
+  res.json({
+    roles: MODEL_ROLES.map((role) => {
+      const baseUrl = process.env[`${role}_BASE_URL`] ?? "";
+      let host = "";
+      try {
+        host = baseUrl ? new URL(baseUrl).host : "";
+      } catch {
+        host = "(invalid URL)";
+      }
+      return {
+        role,
+        host,
+        model: process.env[`${role}_MODEL`] ?? "",
+        provider: role === "IMAGE_GEN" ? process.env.IMAGE_GEN_PROVIDER ?? "" : undefined,
+        hasApiKey: Boolean(process.env[`${role}_API_KEY`]),
+      };
+    }),
+  });
+});
+
 router.get("/global-state", (_req, res) => {
   if (!appContext.hasWorld) {
     res.status(503).json({ error: "No world loaded" });
