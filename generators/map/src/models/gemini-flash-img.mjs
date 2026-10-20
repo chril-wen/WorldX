@@ -5,6 +5,7 @@
 
 import { logModelCall, logModelResponse, logModelImageResponse, logError } from "../utils/logger.mjs";
 import { getMapImageSizeLabel } from "../utils/generation-config.mjs";
+import { isArkProvider, arkGenerateImage, arkEditImage } from "../../../shared/ark-seedream.mjs";
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
@@ -102,6 +103,14 @@ export async function generateImage(
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      if (isArkProvider(PROVIDER, BASE_URL)) {
+        const buf = await arkGenerateImage(prompt, {
+          baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, aspectRatio, imageSize, signal: controller.signal,
+        });
+        logModelImageResponse(logStep, MODEL, "(returned to caller)", buf.length);
+        return buf;
+      }
+
       const nativePrompt = useGoogleNativeProvider()
         ? `${prompt}\n\nGenerate the image in ${aspectRatio} aspect ratio.`
         : prompt;
@@ -169,6 +178,14 @@ export async function editImage(text, imageBuffer, { imageSize = "2K", logStep =
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      if (isArkProvider(PROVIDER, BASE_URL)) {
+        const buf = await arkEditImage(text, imageBuffer, {
+          baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,
+        });
+        logModelImageResponse(logStep, MODEL, "(returned to caller)", buf.length);
+        return buf;
+      }
+
       const res = useGoogleNativeProvider()
         ? await postGoogleNativeImage(
             [

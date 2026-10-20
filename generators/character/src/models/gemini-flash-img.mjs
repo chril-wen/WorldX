@@ -3,6 +3,8 @@
  * Reads IMAGE_GEN_* env vars. Simplified client for character sprite generation.
  */
 
+import { isArkProvider, arkEditImage } from "../../../shared/ark-seedream.mjs";
+
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
 const MODEL = process.env.IMAGE_GEN_MODEL || DEFAULT_MODEL;
@@ -66,6 +68,12 @@ export async function editImage(text, imageBuffer, { imageSize = "1K" } = {}) {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
+    if (isArkProvider(PROVIDER, BASE_URL)) {
+      return await arkEditImage(text, imageBuffer, {
+        baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,
+      });
+    }
+
     const res = useGoogleNativeProvider()
       ? await postGoogleNativeImage(
           [
