@@ -60,7 +60,10 @@ async function postArk({ baseUrl, apiKey, model, body, signal }) {
     }
 
     if (!res.ok) {
-      throw new Error(`Ark Image API error ${res.status}: ${await res.text()}`);
+      const body = await res.text();
+      const error = new Error(`Ark Image API error ${res.status}: ${body}`);
+      error.status = res.status;
+      throw error;
     }
 
     const data = await res.json();
@@ -94,4 +97,55 @@ export async function arkEditImage(text, imageBuffer, { baseUrl, apiKey, model, 
     },
   });
   return sharp(buf).resize(width, height, { fit: "fill" }).png().toBuffer();
+}
+
+/**
+ * Outpainting with a canvas + mask.
+ *
+ * mask is a single-channel grayscale PNG: 0 = keep the canvas pixel as-is,
+ * 255 = let the model regenerate it. Different Ark builds name this field
+ * differently, so we try the known aliases in order and keep the first that
+ * the API accepts.
+ */
+const MASK_FIELD_ALIASES = ["image_mask", "mask", "image-mask"];
+
+export async function arkOutpaintImage(
+  text,
+  canvasBuffer,
+  maskBuffer,
+  { baseUrl, apiKey, model, imageSize, signal, exactSize },
+) {
+  const { width, height } = await sharp(canvasBuffer).metadata();
+  const image = `data:image/png;base64,${canvasBuffer.toString("base64")}`;
+  const mask = `data:image/png;base64,${maskBuffer.toString("base64")}`;
+  // exactSize keeps the output at the canvas resolution so the caller can
+  // composite the original region back pixel-for-pixel.
+  const size = exactSize || resolveArkSize(width / height, imageSize);
+
+  let lastError = null;
+  for (const field of MASK_FIELD_ALIASES) {
+    try {
+      const buf = await postArk({
+        baseUrl, apiKey, model, signal,
+        body: { prompt: text, image, [field]: mask, size },
+      });
+      return sharp(buf).png().toBuffer();
+    } catch (err) {
+      // A 4xx means this field name isn't understood — try the next alias.
+      // Anything else (rate limit, network) should bubble up immediately.
+      const status = Number(err?.status ?? err?.response?.status);
+      const message = String(err?.message ?? "");
+      const isUnknownField =
+        status === 400 || status === 422 ||
+        /invalid|unknown|unsupported|not found|mask/i.test(message);
+      if (!isUnknownField) throw err;
+      lastError = err;
+      console.warn(
+        `[ark-seedream] mask field "${field}" rejected (${message.slice(0, 160)}), trying next alias`,
+      );
+    }
+  }
+  throw new Error(
+    `Outpainting failed: no accepted mask field among ${MASK_FIELD_ALIASES.join(", ")}. Last error: ${lastError?.message ?? "unknown"}`,
+  );
 }

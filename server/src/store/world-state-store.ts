@@ -134,3 +134,41 @@ export function getAllGlobalState(): WorldGlobalEntry[] {
     (r) => ({ key: r.key, value: r.value }),
   );
 }
+
+// ─── Item stock management ────────────────────────────────────────────────────
+// Economics items are stored as global state entries keyed "item:<id>"
+// e.g. item:tea_leaf → JSON { stock: 10 }
+
+export interface ItemStock {
+  stock: number;
+  state: string; // "available" | "low" | "out"
+}
+
+export function getItemStock(itemId: string): ItemStock | null {
+  const raw = getGlobalState(`item:${itemId}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ItemStock;
+  } catch {
+    return null;
+  }
+}
+
+export function setItemStock(itemId: string, stock: number, displayStates?: Record<string, number>): void {
+  let state = "available";
+  if (displayStates) {
+    const thresholds = Object.entries(displayStates)
+      .map(([s, threshold]) => ({ state: s, threshold: Number(threshold) }))
+      .sort((a, b) => b.threshold - a.threshold);
+    for (const { state: s, threshold } of thresholds) {
+      if (stock >= threshold) { state = s; break; }
+    }
+  }
+  setGlobalState(`item:${itemId}`, JSON.stringify({ stock: Math.max(0, stock), state }));
+}
+
+export function initItemStocks(items: Array<{ id: string; initialStock: number; displayStates?: Record<string, number> }>): void {
+  for (const item of items) {
+    setItemStock(item.id, item.initialStock, item.displayStates);
+  }
+}

@@ -12,6 +12,7 @@ import {
   getBatchTicksForOneCycle,
 } from "../../utils/time-helpers.js";
 import * as eventStore from "../../store/event-store.js";
+import { getWeatherInfo } from "../../core/weather-manager.js";
 import { enrichEventTime } from "./events.js";
 
 const router = Router();
@@ -106,6 +107,7 @@ router.post("/tick", async (req, res) => {
     res.json({
       ok: true,
       gameTime: worldTime,
+      weather: getWeatherInfo(),
       eventCount: events.length,
       events: persistedEvents,
       ...buildSimulationActivityPayload(),

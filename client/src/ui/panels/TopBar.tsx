@@ -11,7 +11,7 @@ import { AdvancedPanel } from "./AdvancedPanel";
 import { SandboxChatPanel } from "./SandboxChatPanel";
 import { TimelineManagerModal } from "./TimelineManagerModal";
 import { LanguageToggle } from "../components/LanguageToggle";
-import { translatePeriod } from "../utils/time-i18n";
+import { translatePeriod, weatherIcon, translateWeather } from "../utils/time-i18n";
 import { sortLibraryWorldsForLocale } from "../utils/library-world-sort";
 
 type ViewMode = "run" | "replay";
@@ -212,6 +212,8 @@ export function TopBar({
 
   const worldName = worldInfo?.worldName || "WorldX";
   const period = gameTime.period ? translatePeriod(gameTime.period) : "";
+  const weatherLabel = gameTime.weather ? translateWeather(gameTime.weather.kind) : "";
+  const weatherSym = gameTime.weather ? weatherIcon(gameTime.weather.kind) : "";
   const timeLabel = gameTime.timeString
     ? (period
       ? t("topbar.dayTimePeriod", { day: gameTime.day, time: gameTime.timeString, period })
@@ -328,6 +330,11 @@ export function TopBar({
           <span style={{ fontSize: 11, opacity: 0.78, whiteSpace: "nowrap" }}>{statusLabel}</span>
           <span style={{ opacity: 0.45 }}>|</span>
           <span style={{ fontSize: 12, color: "#dfe6e9", whiteSpace: "nowrap" }}>{timeLabel}</span>
+          {weatherSym && (
+            <span title={weatherLabel} style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+              {" "}{weatherSym}{weatherLabel}
+            </span>
+          )}
         </div>
 
         {/* Right: mode toggle + play/pause */}

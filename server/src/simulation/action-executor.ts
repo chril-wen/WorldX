@@ -443,6 +443,29 @@ function applyEffect(
       worldManager.setGlobal(effect.target, String(effect.value));
       break;
     }
+    case "object_state": {
+      // e.g. { target: "tea_counter", state: "low" }
+      if (effect.target && effect.value !== undefined) {
+        worldManager.updateObjectState(effect.target, String(effect.value));
+      }
+      break;
+    }
+    case "consume_item": {
+      // e.g. { target: "tea_counter", amount: 1 }
+      const amt = (effect as any).amount as number | undefined;
+      if (effect.target && worldManager.consumeItem) {
+        worldManager.consumeItem(effect.target, Math.max(1, Number(amt ?? 1) | 0));
+      }
+      break;
+    }
+    case "restock_item": {
+      // e.g. { target: "tea_counter", amount: 5 }
+      const amt = (effect as any).amount as number | undefined;
+      if (effect.target && worldManager.restockItem) {
+        worldManager.restockItem(effect.target, Math.max(1, Number(amt ?? 1) | 0));
+      }
+      break;
+    }
     case "character_emotion":
       applyEmotionEffect(effect, charId, characterManager);
       break;

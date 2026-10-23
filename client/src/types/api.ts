@@ -116,9 +116,24 @@ export interface SimulationEvent {
   createdAt: string;
 }
 
+export type WeatherKind =
+  | "clear"
+  | "cloudy"
+  | "overcast"
+  | "fog"
+  | "light_rain"
+  | "heavy_rain"
+  | "thunderstorm";
+
+export interface WeatherInfo {
+  kind: WeatherKind;
+  label: string;
+}
+
 export interface WorldTimeInfo extends GameTime {
   timeString: string;
   period: string;
+  weather?: WeatherInfo;
 }
 
 export interface LocationInfo {

@@ -48,6 +48,13 @@ function normalizeInteraction(interaction, fallbackId, fallbackName) {
   if (interaction?.requiresAnchor === true) {
     result.requiresAnchor = true;
   }
+  // Rich world: indoor/outdoor exposure and weather gating
+  if (interaction?.exposure === "indoor" || interaction?.exposure === "outdoor") {
+    result.exposure = interaction.exposure;
+  }
+  if (Array.isArray(interaction?.blockedWeather) && interaction.blockedWeather.length > 0) {
+    result.blockedWeather = interaction.blockedWeather;
+  }
   return result;
 }
 
@@ -97,7 +104,7 @@ function normalizeRegion(region, index) {
       )
     : [];
 
-  return {
+  const result = {
     id,
     name,
     description: region?.description || "",
@@ -111,6 +118,10 @@ function normalizeRegion(region, index) {
     expectedObjects: Array.isArray(region?.expectedObjects) ? region.expectedObjects : [],
     interactions,
   };
+  if (region?.indoor === true || region?.indoor === false) {
+    result.indoor = region.indoor;
+  }
+  return result;
 }
 
 function normalizeWorldAction(action, index) {
@@ -163,7 +174,7 @@ function normalizeInteractiveElement(element, index) {
       )
     : [];
 
-  return {
+  const result = {
     id,
     name,
     description: element?.description || "",
@@ -171,6 +182,10 @@ function normalizeInteractiveElement(element, index) {
     placementHint: element?.placementHint || "",
     interactions,
   };
+  if (element?.indoor === true || element?.indoor === false) {
+    result.indoor = element.indoor;
+  }
+  return result;
 }
 
 function normalizeWorldSocialContext(value, fallback = "") {
@@ -234,7 +249,72 @@ function normalizeMultiDayConfig(rawInput, sceneType, startTime) {
   return { enabled, endOfDayText, newDayText, nextDayStartTime };
 }
 
-export function normalizeWorldDesign(rawDesign) {
+function normalizeEconomics(rawEconomics) {
+  if (!rawEconomics || typeof rawEconomics !== "object") return null;
+  const items = Array.isArray(rawEconomics.items)
+    ? rawEconomics.items
+        .filter((item) => item?.id && item?.name)
+        .map((item) => ({
+          id: String(item.id).trim(),
+          name: String(item.name).trim(),
+          initialStock: Math.max(0, Number(item.initialStock) || 0),
+          consumptionPerUse: Math.max(1, Number(item.consumptionPerUse) || 1),
+          restockAction: String(item.restockAction || "").trim() || undefined,
+          restockAmount: Math.max(0, Number(item.restockAmount) || 0),
+          displayStates: normalizeDisplayStates(item.displayStates),
+          trackedBy: String(item.trackedBy || "").trim() || undefined,
+        }))
+    : [];
+  if (items.length === 0) return null;
+  return { items };
+}
+
+function normalizeDisplayStates(raw) {
+  if (raw && typeof raw === "object") {
+    const result = {};
+    for (const [key, val] of Object.entries(raw)) {
+      const n = Number(val);
+      if (Number.isFinite(n)) result[String(key)] = n;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+  return undefined;
+}
+
+function normalizeRelationships(rawRelationships, characters) {
+  if (!Array.isArray(rawRelationships) || rawRelationships.length === 0) return [];
+  const charNames = new Set(characters.map((c) => c.name?.trim()).filter(Boolean));
+  return rawRelationships
+    .filter((rel) => {
+      return charNames.has(String(rel.charA || "").trim()) && charNames.has(String(rel.charB || "").trim());
+    })
+    .map((rel) => ({
+      charA: String(rel.charA).trim(),
+      charB: String(rel.charB).trim(),
+      affinity: Math.max(0, Math.min(5, Math.round(Number(rel.affinity) ?? 2))),
+      tension: Math.max(0, Math.min(5, Math.round(Number(rel.tension) ?? 0))),
+      note: String(rel.note || "").trim() || undefined,
+    }));
+}
+
+function normalizeWeather(rawWeather) {
+  if (!rawWeather || typeof rawWeather !== "object") return null;
+  const preset = rawWeather.preset;
+  const validPresets = ["temperate", "southern_water_town", "desert", "tropical", "tundra"];
+  if (!validPresets.includes(preset)) return null;
+  const result = { preset };
+  if (typeof rawWeather.indoorDefault === "boolean") {
+    result.indoorDefault = rawWeather.indoorDefault;
+  }
+  return result;
+}
+
+function normalizeHearsay(rawHearsay) {
+  if (!rawHearsay || typeof rawHearsay !== "object") return { enabled: false };
+  return { enabled: rawHearsay.enabled === true };
+}
+
+function normalizeWorldDesign(rawDesign) {
   const rawRegions = Array.isArray(rawDesign?.regions)
     ? rawDesign.regions
     : Array.isArray(rawDesign?.locations)
@@ -281,6 +361,11 @@ export function normalizeWorldDesign(rawDesign) {
     timeConfig.startTime,
   );
 
+  const economics = normalizeEconomics(rawDesign?.economics);
+  const relationships = normalizeRelationships(rawDesign?.relationships, characters);
+  const weather = normalizeWeather(rawDesign?.weather);
+  const hearsay = normalizeHearsay(rawDesign?.hearsay);
+
   return {
     ...rawDesign,
     sceneType,
@@ -296,5 +381,60 @@ export function normalizeWorldDesign(rawDesign) {
     locations,
     worldActions,
     mapPlan: deriveMapPlan(rawDesign?.mapPlan, regions),
+    economics,
+    relationships,
+    weather,
+    hearsay,
+  };
+}
+
+/**
+ * Normalize the output of the expand-world LLM prompt.
+ * Validates and normalizes new characters and locations, then returns them.
+ */
+export function normalizeExpandDesign(rawDesign) {
+  const rawRegions = Array.isArray(rawDesign?.regions)
+    ? rawDesign.regions
+    : [];
+  const rawInteractiveElements = Array.isArray(rawDesign?.interactiveElements)
+    ? rawDesign.interactiveElements
+    : [];
+
+  const regions = rawRegions.map((region, index) => normalizeRegion(region, index));
+  const interactiveElements = rawInteractiveElements.map((el, index) =>
+    normalizeInteractiveElement(el, index),
+  );
+
+  const characters = Array.isArray(rawDesign?.characters)
+    ? rawDesign.characters.map((char) => ({
+        ...char,
+        anchor: normalizeCharacterAnchor(char?.anchor),
+        skills: Array.isArray(char?.skills) ? char.skills : [],
+        writeDiary: char?.writeDiary ?? false,
+        fourthWallCandidate: char?.fourthWallCandidate ?? false,
+        tags: Array.isArray(char?.tags) ? char.tags : [],
+        extraversionLevel: Math.max(1, Math.min(5, Number(char?.extraversionLevel ?? 3))),
+        intuitionLevel: Math.max(1, Math.min(5, Number(char?.intuitionLevel ?? 3))),
+        socialStyle: normalizeSocialStyle(char?.socialStyle),
+        coreValues: Array.isArray(char?.coreValues) ? char.coreValues : [],
+        fears: Array.isArray(char?.fears) ? char.fears : [],
+        initialMemories: Array.isArray(char?.initialMemories)
+          ? char.initialMemories.map((m) => ({ type: "reflection", content: String(m) }))
+          : [],
+        name: String(char?.name || "").trim(),
+        role: String(char?.role || "unknown").trim(),
+        personality: String(char?.personality || "").trim(),
+        appearance: String(char?.appearance || "").trim(),
+        appearanceHint: String(char?.appearanceHint || "").trim(),
+        motivation: String(char?.motivation || "").trim(),
+        speakingStyle: String(char?.speakingStyle || "").trim(),
+        coreMotivation: String(char?.coreMotivation || char?.motivation || "").trim(),
+      }))
+    : [];
+
+  return {
+    characters,
+    regions,
+    interactiveElements,
   };
 }

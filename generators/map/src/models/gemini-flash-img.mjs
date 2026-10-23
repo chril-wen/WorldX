@@ -3,9 +3,21 @@
  * Reads IMAGE_GEN_* env vars. Default: OpenRouter + gemini-3.1-flash-image-preview.
  */
 
+import dotenv from "dotenv";
+import sharp from "sharp";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { logModelCall, logModelResponse, logModelImageResponse, logError } from "../utils/logger.mjs";
 import { getMapImageSizeLabel } from "../utils/generation-config.mjs";
-import { isArkProvider, arkGenerateImage, arkEditImage } from "../../../shared/ark-seedream.mjs";
+import { isArkProvider, arkGenerateImage, arkEditImage, arkOutpaintImage } from "../../../shared/ark-seedream.mjs";
+import {
+  isOpenAiImagesProvider,
+  openAiGenerateImage,
+  openAiEditImage,
+} from "../../../shared/openai-images.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, "../../../../.env") });
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
@@ -52,6 +64,32 @@ function useGoogleNativeProvider() {
   );
 }
 
+/**
+ * 文生图时的目标尺寸。
+ *
+ * OpenAI Images API 接受任意 WxH（不限于固定的几档预设），实测
+ * 1536x1024 / 1920x720 / 1536x576 / 2048x768 / 2560x720 都能原样返回。
+ * 所以这里按【精确宽高比】计算，避免模型重采样时改变构图。
+ */
+function openAiSizeForAspect(aspectRatio, imageSize) {
+  const aspect = (() => {
+    const [w, h] = String(aspectRatio || "16:9").split(":").map(Number);
+    return w > 0 && h > 0 ? w / h : 16 / 9;
+  })();
+
+  const LONG_EDGE = (() => {
+    const k = parseInt(String(imageSize || "1K").toUpperCase().replace("K", ""), 10);
+    return (Number.isFinite(k) && k > 0 ? k : 1) * 1024;
+  })();
+
+  // 长边 = imageSize，短边按比例。宽高都取 16 的倍数（模型偏好）。
+  const long = Math.min(LONG_EDGE, 4096);
+  const short = Math.round(long / aspect / 16) * 16;
+  const w = aspect >= 1 ? long : short;
+  const h = aspect >= 1 ? short : long;
+  return `${w}x${h}`;
+}
+
 function getGoogleNativeBaseUrl() {
   const trimmed = BASE_URL.replace(/\/+$/, "");
   return trimmed.endsWith("/openai")
@@ -92,21 +130,73 @@ async function postGoogleNativeImage(parts, { apiKey, signal }) {
  */
 export async function generateImage(
   prompt,
-  { aspectRatio = "16:9", imageSize = getMapImageSizeLabel(), logStep = "flash-img-gen", requestTimeoutMs, timeoutEnvKey } = {},
+  { aspectRatio = "16:9", imageSize = getMapImageSizeLabel(), logStep = "flash-img-gen", requestTimeoutMs, timeoutEnvKey, referenceImage, maskImage } = {},
 ) {
   return withRetry(async () => {
     const API_KEY = process.env.IMAGE_GEN_API_KEY || "";
-    logModelCall(logStep, MODEL, prompt, [`config: aspect=${aspectRatio}, size=${imageSize}`]);
+    const mode = maskImage ? "outpaint" : referenceImage ? "edit" : "text-to-image";
+    logModelCall(logStep, MODEL, prompt, [`config: aspect=${aspectRatio}, size=${imageSize}, mode=${mode}`]);
     const timeoutMs = resolveRequestTimeoutMs(requestTimeoutMs, timeoutEnvKey);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    // OpenAI Images API 的 size 必须与参考图尺寸一致，否则模型会重采样整张图，
+    // 把本该锁定的旧区内容改写掉。
+    let referenceSize;
+    if (referenceImage) {
+      const meta = await sharp(referenceImage).metadata();
+      referenceSize = `${meta.width}x${meta.height}`;
+    }
+
     try {
+      if (isOpenAiImagesProvider(PROVIDER, BASE_URL)) {
+        // OpenAI Images API：/images/generations 与 /images/edits。
+        // size 必须与画布一致，否则模型会重采样整张图，旧区内容会被改写。
+        let buf;
+        if (maskImage) {
+          // Outpainting: canvas + mask。mask 语义在 openai-images 内部转换
+          // （项目用灰度 255=生成，OpenAI 用 alpha 透明=生成）。
+          buf = await openAiEditImage(prompt, referenceImage, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL,
+            maskBuffer: maskImage,
+            size: referenceSize,
+            signal: controller.signal,
+          });
+        } else if (referenceImage) {
+          buf = await openAiEditImage(prompt, referenceImage, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL,
+            size: referenceSize,
+            signal: controller.signal,
+          });
+        } else {
+          buf = await openAiGenerateImage(prompt, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL,
+            size: openAiSizeForAspect(aspectRatio, imageSize),
+            signal: controller.signal,
+          });
+        }
+        logModelImageResponse(logStep, MODEL, "(returned to caller)", buf.length);
+        return buf;
+      }
+
       if (isArkProvider(PROVIDER, BASE_URL)) {
-        const buf = await arkGenerateImage(prompt, {
-          baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, aspectRatio, imageSize, signal: controller.signal,
-        });
+        let buf;
+        if (maskImage) {
+          // Outpainting: canvas + mask. The model keeps masked-out pixels and
+          // regenerates the masked region in context.
+          buf = await arkOutpaintImage(prompt, referenceImage, maskImage, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,
+          });
+        } else if (referenceImage) {
+          buf = await arkEditImage(prompt, referenceImage, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,
+          });
+        } else {
+          buf = await arkGenerateImage(prompt, {
+            baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, aspectRatio, imageSize, signal: controller.signal,
+          });
+        }
         logModelImageResponse(logStep, MODEL, "(returned to caller)", buf.length);
         return buf;
       }
@@ -115,10 +205,18 @@ export async function generateImage(
         ? `${prompt}\n\nGenerate the image in ${aspectRatio} aspect ratio.`
         : prompt;
       const res = useGoogleNativeProvider()
-        ? await postGoogleNativeImage([{ text: nativePrompt }], {
-            apiKey: API_KEY,
-            signal: controller.signal,
-          })
+        ? await postGoogleNativeImage(
+            referenceImage
+              ? [
+                  { text: nativePrompt },
+                  { inlineData: { mimeType: "image/png", data: referenceImage.toString("base64") } },
+                ]
+              : [{ text: nativePrompt }],
+            {
+              apiKey: API_KEY,
+              signal: controller.signal,
+            }
+          )
         : await fetch(`${BASE_URL}/chat/completions`, {
             method: "POST",
             headers: {
@@ -127,7 +225,28 @@ export async function generateImage(
             },
             body: JSON.stringify({
               model: MODEL,
-              messages: [{ role: "user", content: prompt }],
+              messages: [
+                {
+                  role: "user",
+                  content: referenceImage
+                    ? [
+                        { type: "text", text: prompt },
+                        {
+                          type: "image_url",
+                          image_url: { url: `data:image/png;base64,${referenceImage.toString("base64")}` },
+                        },
+                        ...(maskImage
+                          ? [
+                              {
+                                type: "image_url",
+                                image_url: { url: `data:image/png;base64,${maskImage.toString("base64")}` },
+                              },
+                            ]
+                          : []),
+                      ]
+                    : prompt,
+                },
+              ],
               modalities: ["image", "text"],
               image_config: { aspect_ratio: aspectRatio, image_size: imageSize },
             }),
@@ -178,6 +297,17 @@ export async function editImage(text, imageBuffer, { imageSize = "2K", logStep =
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      if (isOpenAiImagesProvider(PROVIDER, BASE_URL)) {
+        const meta = await sharp(imageBuffer).metadata();
+        const buf = await openAiEditImage(text, imageBuffer, {
+          baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL,
+          size: `${meta.width}x${meta.height}`,
+          signal: controller.signal,
+        });
+        logModelImageResponse(logStep, MODEL, "(returned to caller)", buf.length);
+        return buf;
+      }
+
       if (isArkProvider(PROVIDER, BASE_URL)) {
         const buf = await arkEditImage(text, imageBuffer, {
           baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,

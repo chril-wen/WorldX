@@ -136,6 +136,14 @@ export function formatEventSummary(
         : t("eventFormat.memoryNoName");
     case "event_triggered":
       return event.data?.title || event.data?.name || event.data?.summary || t("eventFormat.eventTriggeredFallback");
+    case "world_state_change": {
+      const kind = event.data?.kind;
+      if (kind === "weather") {
+        const desc = event.data?.description;
+        return desc ? `🌤️ ${desc}` : t("eventFormat.weatherChanged", { weather: event.data?.to ?? kind });
+      }
+      return event.data?.description ?? t("eventFormat.worldStateChanged", { kind: kind ?? "state" });
+    }
     default:
       if (actorName) return `${actorName}: ${summarizePayload(event.data)}`;
       return summarizePayload(event.data);

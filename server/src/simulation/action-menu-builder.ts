@@ -24,7 +24,7 @@ export function buildActionMenu(
   const sceneConfig = worldManager.getSceneConfig();
 
   const worldActionLines: string[] = [];
-  const worldActions = worldManager.getWorldActions();
+  const worldActions = worldManager.getAvailableWorldActions(state.location);
   for (const action of worldActions) {
     if (!action.repeatable && recentInteractionIds.has(action.id)) continue;
 

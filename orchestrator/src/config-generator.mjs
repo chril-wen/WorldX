@@ -80,6 +80,10 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
     locations,
     mainAreaPoints,
     worldSize,
+    // Rich world fields
+    economics: normalizedDesign.economics || null,
+    weather: normalizedDesign.weather || null,
+    hearsay: normalizedDesign.hearsay || null,
     metadata: {
       worldName: normalizedDesign.worldName,
       worldDescription: normalizedDesign.worldDescription,
@@ -133,6 +137,10 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
       if (anchoredPos) startPos = anchoredPos;
     }
 
+    // Rich world: resolve relationships for this character
+    const relData = buildCharacterRelationships(charDesign, normalizedDesign.relationships);
+    const initialMemories = buildCharacterMemories(charDesign, normalizedDesign.relationships);
+
     const iconicCues = normalizeIconicCues(charDesign.iconicCues);
     const canonicalRefs = normalizeCanonicalRefs(charDesign.canonicalRefs);
 
@@ -160,7 +168,11 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
       motivation: charDesign.motivation,
       socialStyle: charDesign.socialStyle,
       startPosition: startPos,
-      initialMemories: [...backgroundMemories, ...signatureMemories],
+      initialMemories: [...backgroundMemories, ...signatureMemories, ...initialMemories],
+      // Rich world: relationship values and world social context
+      affinity: relData.affinity,
+      tension: relData.tension,
+      worldSocialContext: normalizedDesign.worldSocialContext || "",
     };
 
     if (anchor) config.anchor = anchor;
@@ -211,13 +223,19 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
             getRegionId(other) === primaryPublicHubId ? "main_area" : getRegionId(other),
           );
 
-        return {
+        const indoor = designedLoc?.indoor === true || designedLoc?.indoor === false
+          ? designedLoc.indoor
+          : undefined;
+
+        const result = {
           id: regionId,
           name: region.name || designedLoc?.name || regionId,
           description: props.description || designedLoc?.description || "",
           adjacentLocations,
           objects: regionObjects,
         };
+        if (indoor !== undefined) result.indoor = indoor;
+        return result;
       });
 
     const locations = finalizeLocations(
@@ -871,4 +889,45 @@ function normalizeCanonicalRefs(raw) {
     keyRelationships,
     signatureMoments,
   };
+}
+
+/**
+ * Extract relationship values for a single character.
+ * Returns affinity (0-5, default 2) and tension (0-5, default 0).
+ * A character may appear in multiple relationships; average them.
+ */
+function buildCharacterRelationships(charDesign, relationships) {
+  const name = charDesign.name?.trim();
+  if (!name || !Array.isArray(relationships)) {
+    return { affinity: 2, tension: 0 };
+  }
+  const relevant = relationships.filter(
+    (r) => r.charA === name || r.charB === name,
+  );
+  if (relevant.length === 0) return { affinity: 2, tension: 0 };
+  const avgAffinity = Math.round(relevant.reduce((s, r) => s + (r.affinity ?? 2), 0) / relevant.length);
+  const avgTension = Math.round(relevant.reduce((s, r) => s + (r.tension ?? 0), 0) / relevant.length);
+  return {
+    affinity: Math.max(0, Math.min(5, avgAffinity)),
+    tension: Math.max(0, Math.min(5, avgTension)),
+  };
+}
+
+/**
+ * Build relationship-note memories from the relationships array.
+ */
+function buildCharacterMemories(charDesign, relationships) {
+  const name = charDesign.name?.trim();
+  if (!name || !Array.isArray(relationships)) return [];
+  return relationships
+    .filter((r) => (r.charA === name || r.charB === name) && r.note)
+    .map((r) => {
+      const other = r.charA === name ? r.charB : r.charA;
+      return {
+        type: "reflection",
+        content: `和${other}的关系：${r.note}`,
+        importance: 7,
+        tags: ["background", "relationship"],
+      };
+    });
 }

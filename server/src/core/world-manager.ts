@@ -11,10 +11,12 @@ import type {
   GameTime,
   DialogueSession,
   SceneConfig,
+  WorldConfig,
 } from "../types/index.js";
-import { loadWorldConfig, loadSceneConfig, setWorldDir, getWorldDir } from "../utils/config-loader.js";
+import { loadWorldConfig, loadSceneConfig, setWorldDir, getWorldDir, reloadConfigs } from "../utils/config-loader.js";
 import { setSceneConfig, isSceneComplete, getTicksPerScene } from "../utils/time-helpers.js";
 import * as worldState from "../store/world-state-store.js";
+import { getWeatherState, isBlockedByWeather } from "./weather-manager.js";
 import * as snapshotStore from "../store/snapshot-store.js";
 import type { SnapshotMeta } from "../store/snapshot-store.js";
 
@@ -59,6 +61,12 @@ export class WorldManager {
   private worldSocialContext = "";
   private contentLanguage: "zh" | "en" = "zh";
   private originalPrompt = "";
+  /** Rich world: economics item definitions */
+  private economics: WorldConfig["economics"] = null;
+  /** Rich world: weather preset config */
+  private weatherConfig: WorldConfig["weather"] = null;
+  /** Rich world: hearsay enabled flag */
+  private hearsayEnabled = false;
 
   constructor() {}
 
@@ -90,8 +98,64 @@ export class WorldManager {
     this.sceneConfig = loadSceneConfig();
 
     worldState.initWorldState(this.locationConfigs);
+    // Rich world: initialize item stocks from economics config
+    this.economics = config.economics ?? null;
+    if (this.economics?.items?.length) {
+      worldState.initItemStocks(this.economics.items);
+    }
+    this.weatherConfig = config.weather ?? null;
+    this.hearsayEnabled = config.hearsay?.enabled ?? false;
     const restoredTime = this.restorePersistedTime();
     this.syncSceneClock(restoredTime.day);
+  }
+
+  /** Reload location configs from disk (called after adding new regions via expand-world). */
+  reloadLocations(): void {
+    // world.json 可能被外部进程（地图扩展编排器）改写过，
+    // 必须先清缓存，否则读到的还是旧内容。
+    reloadConfigs();
+
+    const config = loadWorldConfig();
+    this.locationConfigs = normalizeLocations(
+      config.locations,
+      config.worldName ?? "main_area",
+      config.worldDescription ?? "",
+    );
+    // The map may have been expanded: world size and walkable points change with it.
+    if (config.worldSize) {
+      this.worldSize = normalizeWorldSize(config.worldSize) ?? this.worldSize;
+    }
+    if (Array.isArray(config.mainAreaPoints) && config.mainAreaPoints.length > 0) {
+      // 点位可能变了（地图扩展后重建过），邻接关系必须一并重算，
+      // 否则角色之间的可达性判断会基于旧的连通图。
+      this.mainAreaPoints = rebuildMainAreaPointAdjacencyFromTmj(
+        normalizeMainAreaPoints(config.mainAreaPoints),
+      );
+      this.preferredMainAreaPointIds = getLargestMainAreaPointComponent(this.mainAreaPoints);
+      this.mainAreaZoneMap = computeMainAreaZones(this.mainAreaPoints);
+    }
+  }
+
+  /** Append a new location to world.json and reload in-memory configs. */
+  addLocation(location: LocationConfig): void {
+    const config = loadWorldConfig();
+    if (!config.locations) config.locations = [];
+    // Avoid duplicates
+    if (config.locations.some((l) => l.id === location.id)) return;
+    config.locations.push(location);
+    // Write back to world.json
+    const wd = getWorldDir();
+    const candidates = [
+      wd ? path.join(wd, "world.json") : null,
+      wd ? path.join(wd, "config", "world.json") : null,
+    ].filter(Boolean) as string[];
+    for (const wp of candidates) {
+      if (fs.existsSync(wp)) {
+        fs.writeFileSync(wp, JSON.stringify(config, null, 2), "utf-8");
+        break;
+      }
+    }
+    this.reloadLocations();
   }
 
   getWorldName(): string {
@@ -187,6 +251,10 @@ export class WorldManager {
 
   getLocation(locationId: string): LocationConfig | undefined {
     return this.locationConfigs.find((l) => l.id === locationId);
+  }
+
+  getLocations(): LocationConfig[] {
+    return this.locationConfigs;
   }
 
   getAllLocations(): LocationConfig[] {
@@ -348,6 +416,16 @@ export class WorldManager {
     return this.worldActions;
   }
 
+  /** Whether the character stands under a roof here. */
+  isLocationIndoor(locationId: string): boolean | undefined {
+    return this.getLocation(locationId)?.indoor;
+  }
+
+  /** Whether hearsay propagation is enabled for this world. */
+  isHearsayEnabled(): boolean {
+    return this.hearsayEnabled;
+  }
+
   resetTransientStateForNewScene(): void {
     for (const objectState of worldState.getAllObjectStates()) {
       if (objectState.currentUsers.length === 0) continue;
@@ -480,10 +558,22 @@ export class WorldManager {
     if (!objConfig) return [];
 
     const runtime = worldState.getObjectState(objectId);
+    const weather = getWeatherState().kind;
+    const location = this.getLocation(objConfig.locationId);
     return objConfig.interactions.filter(
       (interaction) =>
-        !Array.isArray(interaction.availableWhenState) ||
-        interaction.availableWhenState.includes(runtime.state),
+        (!Array.isArray(interaction.availableWhenState) ||
+          interaction.availableWhenState.includes(runtime.state)) &&
+        !isBlockedByWeather(interaction, location, weather),
+    );
+  }
+
+  /** World actions still possible under the current weather, for a character at `locationId`. */
+  getAvailableWorldActions(locationId?: string): WorldActionConfig[] {
+    const weather = getWeatherState().kind;
+    const location = locationId ? this.getLocation(locationId) : undefined;
+    return this.worldActions.filter(
+      (action) => !isBlockedByWeather(action, location, weather),
     );
   }
 
@@ -514,6 +604,27 @@ export class WorldManager {
 
   setGlobal(key: string, value: string): void {
     worldState.setGlobalState(key, value);
+  }
+
+  /** Consume stock from an item (e.g. serve a cup of tea). Returns updated stock or null. */
+  consumeItem(itemId: string, amount: number = 1): number | null {
+    const raw = worldState.getItemStock(itemId);
+    if (!raw) return null;
+    const next = Math.max(0, raw.stock - amount);
+    // Find displayStates from world economics config
+    const item = this.economics?.items.find((i) => i.id === itemId);
+    worldState.setItemStock(itemId, next, item?.displayStates);
+    return next;
+  }
+
+  /** Restock an item (e.g. refill from storage). Returns updated stock. */
+  restockItem(itemId: string, amount: number = 1): number | null {
+    const raw = worldState.getItemStock(itemId);
+    const current = raw?.stock ?? 0;
+    const item = this.economics?.items.find((i) => i.id === itemId);
+    const next = current + amount;
+    worldState.setItemStock(itemId, next, item?.displayStates);
+    return next;
   }
 
   listDialogueSessions(): DialogueSession[] {

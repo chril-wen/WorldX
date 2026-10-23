@@ -37,6 +37,8 @@ export interface LocationConfig {
   description: string;
   adjacentLocations: string[];
   objects: ObjectConfig[];
+  /** true = sheltered from the weather; false = open air. Unset = unknown. */
+  indoor?: boolean;
 }
 
 export interface MainAreaPointConfig {
@@ -66,9 +68,22 @@ export interface InteractionConfig {
   duration: number;
   effects: Effect[];
   repeatable?: boolean;
+  /** Where the activity happens. Overrides the location's indoor flag for weather checks. */
+  exposure?: "indoor" | "outdoor";
+  /** Weather kinds that forbid this activity. When unset, outdoor activities are blocked in severe weather. */
+  blockedWeather?: WeatherKind[];
   /** When true, this interaction requires dialogue with the anchored character instead of standalone object interaction */
   requiresAnchor?: boolean;
 }
+
+export type WeatherKind =
+  | "clear"
+  | "cloudy"
+  | "overcast"
+  | "fog"
+  | "light_rain"
+  | "heavy_rain"
+  | "thunderstorm";
 
 /** 世界级动作定义 */
 export interface WorldActionConfig extends InteractionConfig {}
@@ -111,4 +126,18 @@ export interface WorldConfig {
   locations: LocationConfig[];
   mainAreaPoints?: MainAreaPointConfig[];
   worldSize?: WorldSizeConfig;
+  economics?: { items: ItemDefinition[] } | null;
+  weather?: { preset: string; indoorDefault?: boolean } | null;
+  hearsay?: { enabled: boolean } | null;
+}
+
+export interface ItemDefinition {
+  id: string;
+  name: string;
+  initialStock: number;
+  consumptionPerUse?: number;
+  restockAction?: string;
+  restockAmount?: number;
+  displayStates?: Record<string, number>;
+  trackedBy?: string;
 }

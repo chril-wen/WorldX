@@ -314,6 +314,68 @@ export const apiClient = {
     return postJSON("/god/whisper", params);
   },
 
+  expandAddCharacter(params: {
+    characterPrompt?: string;
+    characterDesign?: unknown;
+  }): Promise<{ ok: boolean; character: { id: string; name: string; role: string } }> {
+    return postJSON("/expand/character", params);
+  },
+
+  expandAddRegion(params: {
+    regionPrompt?: string;
+    regionDesign?: unknown;
+  }): Promise<{ ok: boolean; region: { id: string; name: string } }> {
+    return postJSON("/expand/region", params);
+  },
+
+  expandAddMap(
+    params: { mapPrompt: string },
+    onProgress?: (stage: string) => void,
+  ): Promise<{ ok: boolean; message: string; result?: unknown }> {
+    const base = API_BASE;
+    return fetch(`${base}/expand/map`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    }).then(async (response) => {
+      if (!response.ok || !response.body) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: { ok: boolean; message: string; result?: unknown } | null = null;
+      let failure: string | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+        for (const chunk of chunks) {
+          const eventLine = chunk.split("\n").find((l) => l.startsWith("event: "));
+          const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
+          if (!eventLine || !dataLine) continue;
+          const event = eventLine.slice(7).trim();
+          const payload = JSON.parse(dataLine.slice(6));
+          if (event === "progress") {
+            onProgress?.(payload.stage);
+          } else if (event === "error") {
+            failure = payload.error;
+          } else if (event === "done") {
+            result = payload;
+          }
+        }
+      }
+
+      if (failure) throw new Error(failure);
+      if (!result) throw new Error("Map expansion ended without a result");
+      return result;
+    });
+  },
+
   sandboxChatStart(params: {
     characterId: string;
     userIdentity?: string;

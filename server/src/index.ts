@@ -16,6 +16,7 @@ import eventsRoutes from "./api/routes/events.js";
 import { createPublicContentRouter } from "./api/routes/content.js";
 import simulationRoutes from "./api/routes/simulation.js";
 import godRoutes from "./api/routes/god.js";
+import expandRoutes from "./api/routes/expand.js";
 import sandboxChatRoutes from "./api/routes/sandbox-chat.js";
 import timelineRoutes from "./api/routes/timeline.js";
 import { resolveInitialWorldDir } from "./utils/world-directories.js";
@@ -104,6 +105,7 @@ async function main() {
   app.use("/api/content", requireWorld, createPublicContentRouter());
   app.use("/api/simulation", requireWorld, simulationRoutes);
   app.use("/api/god", requireWorld, godRoutes);
+  app.use("/api/expand", requireWorld, expandRoutes);
   app.use("/api/sandbox/chat", requireWorld, sandboxChatRoutes);
   app.use("/api/timelines", timelineRoutes);
 

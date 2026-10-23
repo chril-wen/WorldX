@@ -50,6 +50,11 @@ export interface CharacterProfile {
   /** 仅为知名 IP 角色而填，普通原创角色应为 undefined */
   iconicCues?: IconicCues;
   canonicalRefs?: CanonicalRefs;
+
+  /** 关系数值：与其他角色的平均亲近度（0-5，默认2） */
+  affinity?: number;
+  /** 关系数值：与其他角色的平均紧张度（0-5，默认0） */
+  tension?: number;
 }
 
 export interface CharacterAnchor {

@@ -89,6 +89,15 @@
     "advancedTitle": "Batch simulation, world state and model config",
     "sandboxChat": "💬 Sandbox Chat",
     "sandboxChatTitle": "Pull a character out for a private chat (no memory, no world impact)",
+    "weather": {
+      "clear": "Clear",
+      "cloudy": "Cloudy",
+      "overcast": "Overcast",
+      "fog": "Fog",
+      "light_rain": "Light Rain",
+      "heavy_rain": "Heavy Rain",
+      "thunderstorm": "Thunderstorm"
+    },
     "newWorld": "✦ New World",
     "newWorldTitle": "Create a brand-new world",
     "creatingTimeline": "Creating...",
@@ -174,12 +183,19 @@
     "title": "Advanced",
     "subtitle": "Batch runs, state inspection and model config",
     "close": "Close",
-    "tab": { "batch": "Batch Simulation", "state": "World State", "config": "Model Config" },
+    "tab": {
+      "batch": "Batch Simulation",
+      "state": "World State",
+      "config": "Model Config"
+    },
     "batchHint": "Advance many ticks or days in a row. This calls the simulation model continuously and incurs cost. Reload the page afterwards to see the latest scene.",
     "noContext": "No world or timeline is loaded, so nothing can be simulated.",
     "simBusy": "The world is running. Pause auto-play first.",
     "countLabel": "Count",
-    "unit": { "ticks": "ticks", "days": "days" },
+    "unit": {
+      "ticks": "ticks",
+      "days": "days"
+    },
     "maxHint": "max {{max}}",
     "invalidCount": "Count must be between 1 and {{max}}",
     "start": "Start batch run",
@@ -250,6 +266,25 @@
     "presetWindContent": "A fierce wind sweeps through, scattering objects everywhere.",
     "presetBirds": "Eerie flock",
     "presetBirdsContent": "A flock of dark birds circles overhead, lingering as if watching something."
+  },
+  "expand": {
+    "tabExpand": "✦ Expand World",
+    "tabCharacter": "Add Character",
+    "tabRegion": "Add Location",
+    "tabMap": "Expand Map",
+    "characterPromptLabel": "Describe the new character",
+    "characterPromptPlaceholder": "e.g. A mysterious traveling merchant with an exotic accent, curious about everything in town...",
+    "regionPromptLabel": "Describe the new location",
+    "regionPromptPlaceholder": "e.g. A new general store opens at the corner, or an old abandoned well...",
+    "mapPromptLabel": "Describe the map area to expand",
+    "mapPromptPlaceholder": "e.g. Add an abandoned ancient tower at the right edge of the town, with a small stream nearby...",
+    "generating": "Generating...",
+    "addBtn": "Add to World",
+    "expandMapBtn": "Expand Map",
+    "successCharacter": "Added character 「{{name}}」",
+    "successRegion": "Added location 「{{name}}」",
+    "successMap": "Map expanded successfully! New areas added.",
+    "failedPrefix": "Failed: {{error}}"
   },
   "sandbox": {
     "title": "Sandbox Chat",
@@ -363,7 +398,9 @@
     "eventTriggeredFallback": "A story event triggered",
     "defaultSummary": "Something happened",
     "needCuriosity": "curiosity",
-    "needDefault": "a need"
+    "needDefault": "a need",
+    "weatherChanged": "Weather changed: {{weather}}",
+    "worldStateChanged": "State changed: {{kind}}"
   },
   "memoryType": {
     "observation": "observation",

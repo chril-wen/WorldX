@@ -8,6 +8,7 @@ import {
   isSimulationBusy,
 } from "../../services/simulation-activity.js";
 import { buildSceneRuntimeInfo, buildWorldTimeInfo } from "../../utils/time-helpers.js";
+import { getWeatherInfo } from "../../core/weather-manager.js";
 import * as worldStateStore from "../../store/world-state-store.js";
 import {
   GENERATED_WORLDS_DIR,
@@ -34,7 +35,10 @@ router.get("/time", (_req, res) => {
     res.status(503).json({ error: "No world loaded" });
     return;
   }
-  res.json(buildWorldTimeInfo(appContext.worldManager.getCurrentTime()));
+  res.json({
+    ...buildWorldTimeInfo(appContext.worldManager.getCurrentTime()),
+    weather: getWeatherInfo(),
+  });
 });
 
 router.get("/info", (_req, res) => {
@@ -52,6 +56,7 @@ router.get("/info", (_req, res) => {
     currentTimelineId: appContext.timelineManager.getCurrentTimelineId(),
     sceneConfig: wm.getSceneConfig(),
     sceneRuntime: buildSceneRuntimeInfo(wm.getSceneConfig()),
+    weather: getWeatherInfo(),
     worldActions: wm.getWorldActions(),
     mainAreaPoints: wm.getMainAreaPoints(),
     worldSize: wm.getWorldSize(),

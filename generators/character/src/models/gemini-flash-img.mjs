@@ -4,6 +4,12 @@
  */
 
 import { isArkProvider, arkEditImage } from "../../../shared/ark-seedream.mjs";
+import {
+  isOpenAiImagesProvider,
+  openAiEditImage,
+  openAiGenerateImage,
+} from "../../../shared/openai-images.mjs";
+import sharp from "sharp";
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
@@ -68,6 +74,16 @@ export async function editImage(text, imageBuffer, { imageSize = "1K" } = {}) {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
+    if (isOpenAiImagesProvider(PROVIDER, BASE_URL)) {
+      // OpenAI Images API：走 /images/edits，size 必须与参考图一致。
+      const meta = await sharp(imageBuffer).metadata();
+      return await openAiEditImage(text, imageBuffer, {
+        baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL,
+        size: `${meta.width}x${meta.height}`,
+        signal: controller.signal,
+      });
+    }
+
     if (isArkProvider(PROVIDER, BASE_URL)) {
       return await arkEditImage(text, imageBuffer, {
         baseUrl: BASE_URL, apiKey: API_KEY, model: MODEL, imageSize, signal: controller.signal,

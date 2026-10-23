@@ -89,6 +89,15 @@
     "advancedTitle": "批量推进模拟、查看世界状态和模型配置",
     "sandboxChat": "💬 架空对话",
     "sandboxChatTitle": "把某个角色叫出来单独聊（不进入记忆、不影响世界）",
+    "weather": {
+      "clear": "晴",
+      "cloudy": "多云",
+      "overcast": "阴",
+      "fog": "雾",
+      "light_rain": "小雨",
+      "heavy_rain": "大雨",
+      "thunderstorm": "雷雨"
+    },
     "newWorld": "✦ 新世界",
     "newWorldTitle": "创建一个全新的世界",
     "creatingTimeline": "创建中...",
@@ -174,12 +183,19 @@
     "title": "高级操作",
     "subtitle": "批量推进、状态查看与模型配置",
     "close": "关闭",
-    "tab": { "batch": "批量模拟", "state": "世界状态", "config": "模型配置" },
+    "tab": {
+      "batch": "批量模拟",
+      "state": "世界状态",
+      "config": "模型配置"
+    },
     "batchHint": "连续推进多个 tick 或多天，期间会持续调用世界驱动模型并产生费用。完成后刷新页面即可看到最新画面。",
     "noContext": "当前没有加载世界或时间线，无法模拟。",
     "simBusy": "世界正在运行中，请先暂停自动播放。",
     "countLabel": "数量",
-    "unit": { "ticks": "tick", "days": "天" },
+    "unit": {
+      "ticks": "tick",
+      "days": "天"
+    },
     "maxHint": "最多 {{max}}",
     "invalidCount": "数量需在 1 到 {{max}} 之间",
     "start": "开始批量模拟",
@@ -250,6 +266,25 @@
     "presetWindContent": "狂风忽然席卷而来，外面的东西被吹得到处都是。",
     "presetBirds": "诡异鸟群",
     "presetBirdsContent": "一群黑色的鸟在空中盘旋，久久不散，像是在盯着什么。"
+  },
+  "expand": {
+    "tabExpand": "✦ 扩展世界",
+    "tabCharacter": "添加角色",
+    "tabRegion": "添加地点",
+    "tabMap": "扩展地图",
+    "characterPromptLabel": "描述新角色",
+    "characterPromptPlaceholder": "例如：一个神秘的旅行商人，操着外地口音，对镇上的事情充满好奇……",
+    "regionPromptLabel": "描述新地点",
+    "regionPromptPlaceholder": "例如：街角新开了一家杂货铺，或一座废弃的旧井",
+    "mapPromptLabel": "描述要扩展的地图区域",
+    "mapPromptPlaceholder": "例如：在镇子右侧边缘添加一座废弃的古塔，旁边有一条小溪",
+    "generating": "正在生成...",
+    "addBtn": "添加到世界",
+    "expandMapBtn": "扩展地图",
+    "successCharacter": "已添加角色「{{name}}」",
+    "successRegion": "已添加地点「{{name}}」",
+    "successMap": "地图扩展成功！新区域已添加。",
+    "failedPrefix": "扩展失败：{{error}}"
   },
   "sandbox": {
     "title": "架空对话",
@@ -363,7 +398,9 @@
     "eventTriggeredFallback": "触发了一条剧情事件",
     "defaultSummary": "发生了一件事",
     "needCuriosity": "好奇心",
-    "needDefault": "某项状态"
+    "needDefault": "某项状态",
+    "weatherChanged": "天气变了：{{weather}}",
+    "worldStateChanged": "状态改变：{{kind}}"
   },
   "memoryType": {
     "observation": "见闻",
