@@ -758,6 +758,29 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
     );
   }
 
+  // ── 同一区域在多块里返回时，挑最像样的那个 ──
+  //
+  // 视觉模型在看不见该区域的那块里也会给一个坐标，通常是 0,0->1,1
+  // 这种退化框。取「第一个」会正好选中退化框——必须按面积挑。
+  {
+    const designed = [{ id: "grove", name: "竹林", description: "" }];
+    const parsed = [
+      // 块 1：模型没看到，给了退化框
+      { id: "grove", name: "竹林", topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } },
+      // 块 3：模型看到了，给了真实框
+      { id: "grove", name: "竹林", topLeft: { x: 100, y: 50 }, bottomRight: { x: 400, y: 300 } },
+    ];
+    const items = reconcileDesignedItems(
+      parsed,
+      designed,
+      "region",
+      (b) => b,
+      { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } },
+    );
+    check("多候选取面积最大的（而非第一个）", items.length === 1 && items[0].topLeft.x === 100, JSON.stringify(items));
+    check("多候选时没有退化框", items[0].bottomRight.x === 400 && items[0].bottomRight.y === 300);
+  }
+
   // ── 设计阶段同名区域去重 ──
   {
     const design = normalizeExpandDesign({

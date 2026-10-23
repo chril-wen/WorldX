@@ -780,6 +780,16 @@ function normalizeKey(name) {
 }
 
 /**
+ * 矩形框的面积。用来在多个候选坐标里挑「最像样」的那个——
+ * 模型在看不见该区域的块里会给出 0,0->1,1 这种退化框，面积接近 0。
+ */
+function boxArea(box) {
+  const w = (box?.bottomRight?.x ?? 0) - (box?.topLeft?.x ?? 0);
+  const h = (box?.bottomRight?.y ?? 0) - (box?.topLeft?.y ?? 0);
+  return Math.max(0, w) * Math.max(0, h);
+}
+
+/**
  * 把视觉模型返回的坐标与设计阶段的定义对齐。
  *
  * 视觉模型会自己改写 id（比如把 `ruined_pagoda` 写成 `pagoda-1`）。
@@ -838,25 +848,48 @@ export function reconcileDesignedItems(
   const items = [];
   const unmatched = [];
 
+  // 同一个设计项可能在多个块里被返回（模型在看不见它的那块里也会给一个
+  // 退化坐标 0,0->1,1）。收集所有候选，最后挑最像样的那个——
+  // 取「第一个」会选中退化框，因为第一块往往正好不含该区域。
+  const candidates = new Map(); // designed.id -> [{ parsed, area }]
+
   for (const p of parsedItems || []) {
     const designed = resolveExact(p);
     if (!designed) {
       unmatched.push(p);
       continue;
     }
-    // 分块解析时同一个设计项可能在多块里各被返回一次。
-    // 只接受第一次匹配——后面块里的重复项直接丢弃，
-    // 否则同一个区域会在 TMJ 里出现多个框。
-    if (matched.has(designed.id)) {
-      continue;
+    const box = coordOf(p);
+    const area = boxArea(box);
+    if (!candidates.has(designed.id)) candidates.set(designed.id, []);
+    candidates.get(designed.id).push({ designed, box, area });
+  }
+
+  for (const [designedId, list] of candidates) {
+    // 退化框（面积 0 或极小）排最后
+    const best = list
+      .slice()
+      .sort((a, b) => {
+        const aBad = a.area <= 1 ? 1 : 0;
+        const bBad = b.area <= 1 ? 1 : 0;
+        if (aBad !== bBad) return aBad - bBad;
+        return b.area - a.area;
+      })[0];
+
+    if (list.length > 1) {
+      console.log(
+        "[ExpandMap] " + label + " '" + best.designed.name + "' located in " +
+          list.length + " candidates, picked area " + Math.round(best.area),
+      );
     }
-    matched.add(designed.id);
+    matched.add(designedId);
     items.push({
-      ...designed,
-      name: designed.name,
-      description: designed.description || "",
-      type: designed.type || "outdoor",
-      ...coordOf(p),
+      ...best.designed,
+      name: best.designed.name,
+      description: best.designed.description || "",
+      type: best.designed.type || "outdoor",
+      topLeft: best.box.topLeft,
+      bottomRight: best.box.bottomRight,
     });
   }
 
