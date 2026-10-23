@@ -103,15 +103,12 @@ function buildExpandPrompt(userPrompt: string): string {
   }
 
   // 模板里「世界扩展」一节的位置：优先找带分隔线的完整标记，
-  // 找不到就退而求其次找标题本身（模板可能以 --- 开头）。
-  const marker = "\n---\n\n## 世界扩展";
-  let idx = template.indexOf(marker);
-  if (idx < 0) {
-    const headingIdx = template.indexOf("## 世界扩展");
-    if (headingIdx >= 0) {
-      idx = headingIdx;
-      console.warn("[expand] design-world template marker not found, using heading position");
-    }
+  // 找不到就退而求其次找标题本身（模板可能以 --- 开头，此时标记前面没有换行）。
+  const markers = ["\n---\n\n## 世界扩展", "---\n\n## 世界扩展", "## 世界扩展"];
+  let idx = -1;
+  for (const marker of markers) {
+    idx = template.indexOf(marker);
+    if (idx >= 0) break;
   }
   const expandSection = idx >= 0 ? template.slice(idx) : "";
 
