@@ -1,7 +1,20 @@
 import { getDb } from "./db.js";
 import type { LocationConfig, ObjectRuntimeState, WorldGlobalEntry } from "../types/index.js";
 
-export function initWorldState(locations: LocationConfig[]): void {
+/**
+ * 初始化世界状态。
+ *
+ * @param locations - 世界里的地点及其物件
+ * @param opts.onlyMissingObjects - 只补齐缺失的物件状态行，不写全局状态。
+ *   用于「热加载」场景：世界已经被扩图改写过，此时需要给新区域的物件补上
+ *   状态行，但绝不能动 current_day / weather 等运行时状态——那些正被
+ *   模拟引擎使用。全局状态用 INSERT OR IGNORE 虽然也不会覆盖已有值，
+ *   但依赖这个隐式行为太脆弱，显式分开更清楚。
+ */
+export function initWorldState(
+  locations: LocationConfig[],
+  opts: { onlyMissingObjects?: boolean } = {},
+): void {
   const db = getDb();
 
   const insertObj = db.prepare(
@@ -19,6 +32,7 @@ export function initWorldState(locations: LocationConfig[]): void {
         insertObj.run(obj.id, obj.locationId, obj.defaultState, "", "[]");
       }
     }
+    if (opts.onlyMissingObjects) return;
     insertGlobal.run("current_day", "1");
     insertGlobal.run("current_tick", "0");
     insertGlobal.run("power", "on");

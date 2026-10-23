@@ -182,6 +182,33 @@ router.get("/locations", (_req, res) => {
   res.json(appContext.worldManager.getAllLocations());
 });
 
+/**
+ * POST /api/world/reload — 从磁盘重新载入世界配置。
+ *
+ * 服务端在启动时把 world.json 读进内存。地图扩图由外部进程（orchestrator）
+ * 改写 world.json，磁盘变了但内存没变，客户端和服务端对世界的认知就分裂了。
+ * 走 /api/expand/map 的扩图会自动重载；但如果扩图是直接跑脚本做的
+ * （调试、批处理），就需要这个端点来同步。
+ */
+router.post("/reload", (_req, res) => {
+  if (!appContext.hasWorld) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+  try {
+    appContext.worldManager.reloadLocations();
+    const locations = appContext.worldManager.getAllLocations();
+    res.json({
+      ok: true,
+      locationCount: locations.length,
+      mainAreaPointCount: appContext.worldManager.getMainAreaPoints().length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Reload failed: ${message}` });
+  }
+});
+
 router.get("/locations/:id/state", (req, res) => {
   if (!appContext.hasWorld) {
     res.status(503).json({ error: "No world loaded" });

@@ -134,6 +134,10 @@ export class WorldManager {
       this.preferredMainAreaPointIds = getLargestMainAreaPointComponent(this.mainAreaPoints);
       this.mainAreaZoneMap = computeMainAreaZones(this.mainAreaPoints);
     }
+    // 新增区域的物件在 DB 里还没有状态行。getObjectState 找不到行会直接抛
+    // "Object not found"，所以这里必须补上。只补缺失的物件行，不动
+    // current_day / weather 等运行时状态——那些正被模拟引擎使用。
+    worldState.initWorldState(this.locationConfigs, { onlyMissingObjects: true });
   }
 
   /** Append a new location to world.json and reload in-memory configs. */
