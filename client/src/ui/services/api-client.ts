@@ -329,7 +329,7 @@ export const apiClient = {
   },
 
   expandAddMap(
-    params: { mapPrompt: string },
+    params: { mapPrompt: string; side?: "right" | "left" | "top" | "bottom" | "auto" },
     onProgress?: (stage: string) => void,
   ): Promise<{ ok: boolean; message: string; result?: unknown }> {
     const base = API_BASE;

@@ -35,6 +35,10 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
   const [expandTab, setExpandTab] = useState<"character" | "region" | "map">("character");
   const [expandPrompt, setExpandPrompt] = useState("");
   const [expandStage, setExpandStage] = useState("");
+  // 扩图方向：auto = 让 LLM 根据地图内容自己选
+  const [expandSide, setExpandSide] = useState<"auto" | "right" | "left" | "top" | "bottom">(
+    "auto",
+  );
 
   useEffect(() => {
     apiClient
@@ -110,7 +114,7 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setExpandStage("");
     try {
-      await apiClient.expandAddMap({ mapPrompt: trimmed }, (stage) => setExpandStage(stage));
+      await apiClient.expandAddMap({ mapPrompt: trimmed, side: expandSide }, (stage) => setExpandStage(stage));
       showFlash("ok", t("expand.successMap"));
       setExpandPrompt("");
       // 地图底图与 TMJ 都是启动时加载进 Phaser 的，
@@ -361,6 +365,32 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
                     rows={4}
                     style={textareaStyle}
                   />
+                  <label style={{ ...labelStyle, marginTop: 10 }}>{t("expand.sideLabel")}</label>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {(["auto", "right", "left", "top", "bottom"] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setExpandSide(s)}
+                        style={{
+                          flex: "1 1 auto",
+                          minWidth: 52,
+                          padding: "5px 8px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: 4,
+                          background: expandSide === s ? "rgba(255,255,255,0.14)" : "transparent",
+                          color: expandSide === s ? "#fff" : "#9aa4b2",
+                          fontWeight: expandSide === s ? 700 : 400,
+                        }}
+                      >
+                        {t(`expand.side.${s}`)}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#7d8794", lineHeight: 1.5 }}>
+                    {t("expand.sideHint")}
+                  </div>
                   <button
                     onClick={doExpandMap}
                     disabled={busy || !expandPrompt.trim()}

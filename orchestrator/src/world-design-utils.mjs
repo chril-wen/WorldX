@@ -400,8 +400,36 @@ export function normalizeExpandDesign(rawDesign) {
     ? rawDesign.interactiveElements
     : [];
 
-  const regions = rawRegions.map((region, index) => normalizeRegion(region, index));
-  const interactiveElements = rawInteractiveElements.map((el, index) =>
+  // LLM 偶尔会把同一个区域返回两次——同一个名字配两个不同的 id
+  // （实测「青竹林」同时给了 "qingzhulin" 和 "green_bamboo_grove"）。
+  // 两个 id 都会进 world.json 和 TMJ，于是同一个地方在地图上有两个框，
+  // 角色不知道该去哪个。这里按名字去重，保留第一个。
+  const dedupeByName = (items) => {
+    const seenNames = new Set();
+    const seenIds = new Set();
+    const out = [];
+    for (const item of items) {
+      const nameKey = String(item?.name ?? "").trim();
+      const idKey = String(item?.id ?? "").trim();
+      if (nameKey && seenNames.has(nameKey)) {
+        console.warn(
+          "[WorldDesign] Duplicate region name '" + nameKey + "' (id " + idKey + "), dropped",
+        );
+        continue;
+      }
+      if (idKey && seenIds.has(idKey)) {
+        console.warn("[WorldDesign] Duplicate region id '" + idKey + "', dropped");
+        continue;
+      }
+      if (nameKey) seenNames.add(nameKey);
+      if (idKey) seenIds.add(idKey);
+      out.push(item);
+    }
+    return out;
+  };
+
+  const regions = dedupeByName(rawRegions).map((region, index) => normalizeRegion(region, index));
+  const interactiveElements = dedupeByName(rawInteractiveElements).map((el, index) =>
     normalizeInteractiveElement(el, index),
   );
 

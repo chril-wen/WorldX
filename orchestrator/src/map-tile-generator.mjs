@@ -32,6 +32,61 @@ const CONTEXT_STRIP_WIDTH = 96;
 const CONTEXT_CROP_WIDTH = 768;
 
 /**
+ * 扩展方向的统一几何定义。
+ *
+ * 之前 4 个方向散落在各处用 if/else 判断，导致 left/top/bottom 三个方向
+ * 实际上是「按 right 实现的」——边缘取样和接缝融合都取错了边。
+ * 这里把每个方向涉及的所有几何量集中定义一次，其余代码只查表，
+ * 新增方向时不会再漏改某处。
+ *
+ *   tileWidth/tileHeight  —— 新地块在扩展方向上的尺寸（另有一个方向上等于旧图边长）
+ *   horizontal            —— 是否沿水平轴扩展
+ *   seamAxis             —— 接缝所在的轴（'x' 表示接缝是竖线）
+ */
+export const EXPANSION_GEOMETRY = {
+  right:  { horizontal: true,  seamAxis: "x", directionLabel: "向右", opposite: "left" },
+  left:   { horizontal: true,  seamAxis: "x", directionLabel: "向左", opposite: "right" },
+  bottom: { horizontal: false, seamAxis: "y", directionLabel: "向下", opposite: "top" },
+  top:    { horizontal: false, seamAxis: "y", directionLabel: "向上", opposite: "bottom" },
+};
+
+/** 方向是否合法 */
+export function isValidSide(side) {
+  return Object.prototype.hasOwnProperty.call(EXPANSION_GEOMETRY, side);
+}
+
+/**
+ * 计算新地块在完整画布中的位置与尺寸。
+ *
+ * @param {object} baseMeta - 旧图的 sharp metadata
+ * @param {'right'|'left'|'bottom'|'top'} side
+ * @param {number} extent - 扩展方向上新增的像素数（水平扩展=宽度，垂直扩展=高度）
+ */
+export function computeTileGeometry(baseMeta, side, extent) {
+  const geom = EXPANSION_GEOMETRY[side];
+  if (!geom) throw new Error(`Unknown expansion side: ${side}`);
+
+  const baseW = baseMeta.width;
+  const baseH = baseMeta.height;
+
+  // 地块在「扩展方向」上的厚度是 extent，在「另一方向」上与旧图等长
+  const tileWidth = geom.horizontal ? extent : baseW;
+  const tileHeight = geom.horizontal ? baseH : extent;
+
+  // 新地块在完整画布中的左上角
+  let tileLeft = 0;
+  let tileTop = 0;
+  if (side === "right") tileLeft = baseW;
+  else if (side === "bottom") tileTop = baseH;
+  // left / top 的新地块在原点侧，偏移为 0
+
+  const canvasWidth = baseW + (geom.horizontal ? extent : 0);
+  const canvasHeight = baseH + (geom.horizontal ? 0 : extent);
+
+  return { tileLeft, tileTop, tileWidth, tileHeight, canvasWidth, canvasHeight, horizontal: geom.horizontal };
+}
+
+/**
  * 从旧图中提取视觉风格描述，供新地块的生成 prompt 使用。
  */
 export async function extractStyleFromImage(imageBuffer, { geminiProVisionJSON }) {
@@ -100,22 +155,29 @@ export async function generateMapTile(opts) {
     continuationHint = "",
     contentPrompt,
     side = "right",
-    tileWidth = 640,
+    // extent = 扩展方向上新增的像素厚度（水平扩展=宽度增量，垂直扩展=高度增量）。
+    // 旧参数名 tileWidth 保留兼容，但它的语义一直是「增量」而非「地块宽度」——
+    // 地块在另一方向上的长度等于旧图边长，由 buildOutpaintCanvas 决定。
+    extent = 640,
+    tileWidth,
     generateImage,
   } = opts;
+
+  const expandExtent = tileWidth ?? extent;
+  const geom = EXPANSION_GEOMETRY[side];
+  if (!geom) throw new Error(`Unknown expansion side: ${side}`);
 
   // 构造扩展画布与 mask：旧图区 mask=0（锁定），扩展区 mask=255（生成）
   // 只送接缝附近的一小段旧图给模型（cropContextWidth），
   // 避免整张大画布导致生成超时；被裁掉的部分最后由原图贴回。
   const layout = await buildOutpaintCanvas(referenceImage, {
     side,
-    tileWidth,
+    tileWidth: expandExtent,
     contextWidth: CONTEXT_STRIP_WIDTH,
     cropContextWidth: CONTEXT_CROP_WIDTH,
   });
 
-  const directionLabel =
-    side === "right" ? "向右" : side === "left" ? "向左" : side === "bottom" ? "向下" : "向上";
+  const directionLabel = geom.directionLabel;
 
   const prompt =
     "【游戏地图扩图】这是一张游戏俯视地图，" +
@@ -187,16 +249,19 @@ export async function generateMapTile(opts) {
   const fullHeight = baseMeta.height;
 
   // 完整画布里旧图与新区的位置
-  const fullBaseLeft = side === "left" ? tileWidth : 0;
-  const fullBaseTop = side === "top" ? tileWidth : 0;
+  const fullBaseLeft = side === "left" ? expandExtent : 0;
+  const fullBaseTop = side === "top" ? expandExtent : 0;
   const fullTileLeft = side === "left" ? 0 : side === "right" ? fullWidth : 0;
   const fullTileTop = side === "top" ? 0 : side === "bottom" ? fullHeight : 0;
+
+  const fullCanvasWidth = fullWidth + (geom.horizontal ? expandExtent : 0);
+  const fullCanvasHeight = fullHeight + (geom.horizontal ? 0 : expandExtent);
 
   // 以生成结果为底（新区像素来自模型），把原图贴回它自己的位置
   const finalCanvas = await sharp({
     create: {
-      width: fullWidth + (horizontalFull(side) ? tileWidth : 0),
-      height: fullHeight + (horizontalFull(side) ? 0 : tileWidth),
+      width: fullCanvasWidth,
+      height: fullCanvasHeight,
       channels: 3,
       background: { r: 0, g: 0, b: 0 },
     },
@@ -213,8 +278,8 @@ export async function generateMapTile(opts) {
     canvas: finalCanvas,
     tile: finalTile,
     // 最终画布（完整地图）的尺寸
-    canvasWidth: fullWidth + (horizontalFull(side) ? tileWidth : 0),
-    canvasHeight: fullHeight + (horizontalFull(side) ? 0 : tileWidth),
+    canvasWidth: fullCanvasWidth,
+    canvasHeight: fullCanvasHeight,
     // 新地块在【完整画布】中的位置——调用方用它换算 region 的全局坐标
     tileLeft: fullTileLeft,
     tileTop: fullTileTop,
@@ -284,10 +349,18 @@ export async function continueSeam(base, tile, side, width = SEAM_WIDTH) {
     return sharp(out, { raw: { width: W, height: H, channels: 3 } }).png().toBuffer();
   }
 
+  // ── 垂直方向（bottom / top）─────────────────────────────────────────────
+  //
+  // 接缝位置随方向而变：
+  //   bottom —— 新区在下，接缝是【新区第一行】紧接旧图最后一行
+  //   top    —— 新区在上，接缝是【新区最后一行】紧接旧图第一行
+  // 之前的实现不管哪个方向都从新区【顶部】开始混合，于是向上扩展时
+  // 融合的是新区的开头，而那里离接缝最远——接缝自然对不上。
   const W = tileMeta.width;
   const H = tileMeta.height;
   const bh = Math.min(width, H, baseMeta.height);
 
+  // 旧图接缝侧的条带
   const edge = await sharp(base)
     .extract({
       left: 0,
@@ -304,11 +377,14 @@ export async function continueSeam(base, tile, side, width = SEAM_WIDTH) {
   const out = Buffer.from(t.data);
 
   for (let j = 0; j < bh; j++) {
-    const raw = side === "bottom" ? 1 - j / bh : j / bh;
-    const k = smoothstep(raw);
+    // j=0 是紧贴旧图的那一行，完全用旧图边缘；j 增大逐渐过渡到新生成内容
+    const k = smoothstep(1 - j / bh);
+    // 新区里离接缝最近的行
+    const tileRow = side === "bottom" ? j : H - 1 - j;
+    // 旧图里离接缝最近的行
     const srcRow = side === "bottom" ? bh - 1 - j : j;
     for (let x = 0; x < W; x++) {
-      const ti = (j * W + x) * 3;
+      const ti = (tileRow * W + x) * 3;
       const ei = (srcRow * W + x) * 3;
       for (let c = 0; c < 3; c++) {
         out[ti + c] = Math.round(t.data[ti + c] * (1 - k) + edge.data[ei + c] * k);
@@ -329,19 +405,31 @@ export async function analyzeEdgeContinuation(imageBuffer, side, { geminiProVisi
   const meta = await sharp(imageBuffer).metadata();
   const W = meta.width;
   const H = meta.height;
+  const geom = EXPANSION_GEOMETRY[side];
+  if (!geom) throw new Error(`Unknown expansion side: ${side}`);
 
-  // 截取边缘条带（宽 220px）放大，让 Vision 能看清细节
-  const stripWidth = Math.min(220, W);
-  const strip =
-    side === "right"
-      ? await sharp(imageBuffer)
-          .extract({ left: W - stripWidth, top: 0, width: stripWidth, height: H })
-          .resize({ width: 640, height: H, fit: "fill" })
-          .toBuffer()
-      : await sharp(imageBuffer)
-          .extract({ left: 0, top: 0, width: W, height: stripWidth })
-          .resize({ width: W, height: 640, fit: "fill" })
-          .toBuffer();
+  // 截取【扩展方向那一侧】的边缘条带，放大让 Vision 能看清细节。
+  // 之前只区分了 right 和「其它」——left/top/bottom 全都取了顶部条带，
+  // 于是向上扩展时分析的根本不是上边缘，接缝提示自然是错的。
+  const STRIP = 220;
+  let strip;
+  if (geom.horizontal) {
+    // 左右扩展：取左右某一侧的竖条
+    const stripWidth = Math.min(STRIP, W);
+    const left = side === "right" ? W - stripWidth : 0;
+    strip = await sharp(imageBuffer)
+      .extract({ left, top: 0, width: stripWidth, height: H })
+      .resize({ width: 640, height: H, fit: "fill" })
+      .toBuffer();
+  } else {
+    // 上下扩展：取上/下某一侧的横条
+    const stripHeight = Math.min(STRIP, H);
+    const top = side === "bottom" ? H - stripHeight : 0;
+    strip = await sharp(imageBuffer)
+      .extract({ left: 0, top, width: W, height: stripHeight })
+      .resize({ width: W, height: 640, fit: "fill" })
+      .toBuffer();
+  }
 
   const prompt =
     "这是一张游戏俯视地图的【边缘条带】，画面的一侧是地图内部，另一侧是地图的边界之外。\n" +

@@ -278,6 +278,15 @@
     "regionPromptPlaceholder": "e.g. A new general store opens at the corner, or an old abandoned well...",
     "mapPromptLabel": "Describe the map area to expand",
     "mapPromptPlaceholder": "e.g. Add an abandoned ancient tower at the right edge of the town, with a small stream nearby...",
+    "sideLabel": "Expansion direction",
+    "sideHint": "\"Auto\" lets the AI pick the most suitable edge from the map itself; pick a direction to control it manually.",
+    "side": {
+      "auto": "Auto",
+      "right": "Right",
+      "left": "Left",
+      "top": "Up",
+      "bottom": "Down"
+    },
     "generating": "Generating...",
     "addBtn": "Add to World",
     "expandMapBtn": "Expand Map",

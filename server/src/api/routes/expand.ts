@@ -274,7 +274,13 @@ router.post("/region", async (req: Request, res: Response) => {
 /** POST /api/expand/map — 扩展地图区域（SSE 流式返回进度） */
 router.post("/map", async (req: Request, res: Response) => {
   const body = req.body ?? {};
-  const { mapPrompt } = body as { mapPrompt?: string };
+  const { mapPrompt } = body as { mapPrompt?: string; side?: string };
+  // 扩展方向：right/left/top/bottom/auto。auto = 由 LLM 根据地图内容自动选。
+  const expandSide =
+    typeof body.side === "string" &&
+    ["right", "left", "top", "bottom", "auto"].includes(body.side)
+      ? body.side
+      : "auto";
 
   if (!mapPrompt || typeof mapPrompt !== "string" || !mapPrompt.trim()) {
     res.status(400).json({ error: "mapPrompt is required" });
@@ -307,11 +313,15 @@ router.post("/map", async (req: Request, res: Response) => {
     "expand-map.mjs",
   );
 
-  const child = spawn(process.execPath, [scriptPath, worldDir, mapPrompt.trim()], {
-    cwd: path.join(process.cwd(), "..", "orchestrator"),
-    env: { ...process.env },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const child = spawn(
+    process.execPath,
+    [scriptPath, worldDir, expandSide, mapPrompt.trim()],
+    {
+      cwd: path.join(process.cwd(), "..", "orchestrator"),
+      env: { ...process.env },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
 
   let output = "";
   let lastStage = "";

@@ -278,6 +278,15 @@
     "regionPromptPlaceholder": "例如：街角新开了一家杂货铺，或一座废弃的旧井",
     "mapPromptLabel": "描述要扩展的地图区域",
     "mapPromptPlaceholder": "例如：在镇子右侧边缘添加一座废弃的古塔，旁边有一条小溪",
+    "sideLabel": "扩展方向",
+    "sideHint": "「自动」会由 AI 根据地图内容挑选最合适的一边；也可以指定方向手动控制。",
+    "side": {
+      "auto": "自动",
+      "right": "向右",
+      "left": "向左",
+      "top": "向上",
+      "bottom": "向下"
+    },
     "generating": "正在生成...",
     "addBtn": "添加到世界",
     "expandMapBtn": "扩展地图",

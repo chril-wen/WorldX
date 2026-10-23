@@ -17,8 +17,11 @@ import {
   reconcileDesignedItems,
   convertVisionBoxToGlobal,
   buildVisionCoordinatePrompt,
+  planTileSlices,
 } from "./expand-map.mjs";
 import { buildOutpaintCanvas } from "./outpaint-canvas.mjs";
+import { computeTileGeometry, EXPANSION_GEOMETRY, isValidSide } from "./map-tile-generator.mjs";
+import { normalizeExpandDesign } from "./world-design-utils.mjs";
 import { readFileSync } from "fs";
 
 let failures = 0;
@@ -410,6 +413,369 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
   });
   check("提示词声明的宽度等于实际图片宽度", prompt.includes(IMG_W + "×" + IMG_H), prompt.slice(0, 80));
   check("提示词没有声明地块原始尺寸", !prompt.includes(TILE_W + "×" + TILE_H));
+}
+
+// ─── 7. 四方向扩展几何 ──────────────────────────────────────────────────────
+//
+// 覆盖「地图只能横向扩展」这个限制的核心改动：
+//   - 四个方向各自的新地块位置与画布尺寸
+//   - 碰撞网格在向左/向上扩展时必须整体平移，否则旧数据留在左上角，
+//     与背景图对不上——角色会在没墙的地方撞墙
+{
+  console.log("\n=== 7. 四方向扩展几何 ===");
+
+  const BASE_W = 1920;
+  const BASE_H = 720;
+  const EXT = 640;
+  const baseMeta = { width: BASE_W, height: BASE_H };
+
+  check("4 个方向都合法", ["right", "left", "top", "bottom"].every(isValidSide));
+  check("非法方向被拒绝", !isValidSide("diagonal"));
+
+  // right：新区在右侧，画布变宽
+  const gRight = computeTileGeometry(baseMeta, "right", EXT);
+  check("right: 新区左边界 = 旧图宽", gRight.tileLeft === BASE_W, String(gRight.tileLeft));
+  check("right: 新区上边界 = 0", gRight.tileTop === 0);
+  check("right: 画布变宽不变高", gRight.canvasWidth === BASE_W + EXT && gRight.canvasHeight === BASE_H);
+  check("right: 地块宽 = 增量，高 = 旧图高", gRight.tileWidth === EXT && gRight.tileHeight === BASE_H);
+
+  // left：新区在左侧，旧图右移
+  const gLeft = computeTileGeometry(baseMeta, "left", EXT);
+  check("left: 新区左边界 = 0", gLeft.tileLeft === 0, String(gLeft.tileLeft));
+  check("left: 画布变宽不变高", gLeft.canvasWidth === BASE_W + EXT && gLeft.canvasHeight === BASE_H);
+
+  // bottom：新区在下，画布变高
+  const gBottom = computeTileGeometry(baseMeta, "bottom", EXT);
+  check("bottom: 新区上边界 = 旧图高", gBottom.tileTop === BASE_H, String(gBottom.tileTop));
+  check("bottom: 画布变高不变宽", gBottom.canvasWidth === BASE_W && gBottom.canvasHeight === BASE_H + EXT);
+  check("bottom: 地块高 = 增量，宽 = 旧图宽", gBottom.tileWidth === BASE_W && gBottom.tileHeight === EXT);
+
+  // top：新区在上，旧图下移
+  const gTop = computeTileGeometry(baseMeta, "top", EXT);
+  check("top: 新区上边界 = 0", gTop.tileTop === 0);
+  check("top: 画布变高不变宽", gTop.canvasWidth === BASE_W && gTop.canvasHeight === BASE_H + EXT);
+
+  // 新增面积 = 地块面积 = 增量 × 垂直于扩展方向的旧图边长。
+  // 水平扩展时是 640×720，垂直扩展时是 1920×640——因为垂直扩展的新区
+  // 必须覆盖整个宽度。两者不等是几何必然，不是 bug。
+  const addedArea = (g) => g.canvasWidth * g.canvasHeight - BASE_W * BASE_H;
+  check("right 新增面积 = 增量 × 旧图高", addedArea(gRight) === EXT * BASE_H, String(addedArea(gRight)));
+  check("left 新增面积 = 增量 × 旧图高", addedArea(gLeft) === EXT * BASE_H, String(addedArea(gLeft)));
+  check("bottom 新增面积 = 增量 × 旧图宽", addedArea(gBottom) === EXT * BASE_W, String(addedArea(gBottom)));
+  check("top 新增面积 = 增量 × 旧图宽", addedArea(gTop) === EXT * BASE_W, String(addedArea(gTop)));
+  check(
+    "左右方向新增面积相同",
+    addedArea(gRight) === addedArea(gLeft) && addedArea(gTop) === addedArea(gBottom),
+  );
+
+  // ── 碰撞网格在向左扩展时必须右移 ──
+  {
+    const tmj = makeTMJ();
+    const oldW = tmj.width;
+    const oldH = tmj.height;
+    // 在 (5,7) 放一个障碍
+    tmj.layers.find((l) => l.name === "collision").data[7 * oldW + 5] = 1;
+
+    // 向左扩：网格变宽 160 格，旧网格要右移 160 格
+    const newW = oldW + 160;
+    const offsetX = newW - oldW;
+    resizeCollisionGrid(tmj, oldW, oldH, newW, oldH, offsetX, 0);
+
+    const c = tmj.layers.find((l) => l.name === "collision");
+    check("向左扩展: 网格变宽", c.width === newW, String(c.width));
+    check(
+      "向左扩展: 旧障碍跟着右移",
+      c.data[7 * newW + (5 + offsetX)] === 1,
+      `got ${c.data[7 * newW + (5 + offsetX)]}`,
+    );
+    check(
+      "向左扩展: 原位置不再是障碍",
+      c.data[7 * newW + 5] === 1,
+      "左侧新区域默认应为障碍",
+    );
+  }
+
+  // ── 碰撞网格在向上扩展时必须下移 ──
+  {
+    const tmj = makeTMJ();
+    const oldW = tmj.width;
+    const oldH = tmj.height;
+    tmj.layers.find((l) => l.name === "collision").data[7 * oldW + 5] = 1;
+
+    const newH = oldH + 160;
+    const offsetY = newH - oldH;
+    resizeCollisionGrid(tmj, oldW, oldH, oldW, newH, 0, offsetY);
+
+    const c = tmj.layers.find((l) => l.name === "collision");
+    check("向上扩展: 网格变高", c.height === newH, String(c.height));
+    check(
+      "向上扩展: 旧障碍跟着下移",
+      c.data[(7 + offsetY) * oldW + 5] === 1,
+      `got ${c.data[(7 + offsetY) * oldW + 5]}`,
+    );
+  }
+
+  // ── 向右/向下扩展时旧数据位置不变 ──
+  {
+    const tmj = makeTMJ();
+    const oldW = tmj.width;
+    const oldH = tmj.height;
+    tmj.layers.find((l) => l.name === "collision").data[7 * oldW + 5] = 1;
+
+    resizeCollisionGrid(tmj, oldW, oldH, oldW + 160, oldH, 0, 0);
+    const c = tmj.layers.find((l) => l.name === "collision");
+    check("向右扩展: 旧障碍留在原位", c.data[7 * c.width + 5] === 1);
+  }
+
+  // ── 画布构造：4 个方向都正确 ──
+  {
+    const sharp = (await import("sharp")).default;
+    const base = await sharp({
+      create: { width: 400, height: 300, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    })
+      .png()
+      .toBuffer();
+
+    const g = EXPANSION_GEOMETRY;
+    const right = await buildOutpaintCanvas(base, { side: "right", tileWidth: 100 });
+    check("画布 right: 宽 = 旧宽 + 增量", right.canvasWidth === 500 && right.canvasHeight === 300);
+    check("画布 right: 新区在右侧", right.tileLeft === 400 && right.tileTop === 0);
+
+    const left = await buildOutpaintCanvas(base, { side: "left", tileWidth: 100 });
+    check("画布 left: 宽 = 旧宽 + 增量", left.canvasWidth === 500 && left.canvasHeight === 300);
+    check("画布 left: 新区在左侧", left.tileLeft === 0);
+
+    const bottom = await buildOutpaintCanvas(base, { side: "bottom", tileWidth: 100 });
+    check("画布 bottom: 高 = 旧高 + 增量", bottom.canvasWidth === 400 && bottom.canvasHeight === 400);
+    check("画布 bottom: 新区在下", bottom.tileTop === 300);
+
+    const top = await buildOutpaintCanvas(base, { side: "top", tileWidth: 100 });
+    check("画布 top: 高 = 旧高 + 增量", top.canvasWidth === 400 && top.canvasHeight === 400);
+    check("画布 top: 新区在上", top.tileTop === 0);
+
+    check("4 个方向的几何定义齐全", !!g.right && !!g.left && !!g.top && !!g.bottom);
+  }
+
+  // ── 合并时旧 region/物件必须按扩展方向平移 ──
+  //
+  // 向上扩展时新区插在旧图上方，旧图整体下移 640 像素。
+  // 旧 region 的像素坐标若不平移，就会标注到新区的位置上——
+  // 客户端会显示错位的区域框。
+  {
+    const tmj = makeTMJ();
+    const regionsLayer = tmj.layers.find((l) => l.name === "regions");
+    const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
+    const ri = regionsLayer.objects.length;
+    const oi = objectsLayer.objects.length;
+    regionsLayer.objects.push({ id: 99, name: "old_region", x: 100, y: 200, width: 50, height: 60, properties: [{ name: "id", value: "old_region" }] });
+    objectsLayer.objects.push({ id: 99, name: "old_obj", x: 300, y: 400, width: 20, height: 20, properties: [{ name: "objectId", value: "old_obj" }] });
+
+    // 向上扩展 640 像素：旧图下移 640
+    const SHIFT = 640;
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, SHIFT);
+
+    const movedRegion = regionsLayer.objects[ri];
+    const movedObject = objectsLayer.objects[oi];
+    check("向上扩展: 旧 region 的 y 平移", movedRegion.y === 200 + SHIFT, String(movedRegion.y));
+    check("向上扩展: 旧 region 的 x 不变", movedRegion.x === 100, String(movedRegion.x));
+    check("向上扩展: 旧物件的 y 平移", movedObject.y === 400 + SHIFT, String(movedObject.y));
+    check("向上扩展: 旧 region 的 id 属性不变", movedRegion.properties[0].value === "old_region");
+    check("向上扩展: 原有 region 也被平移", regionsLayer.objects[0].y === 100 + SHIFT, String(regionsLayer.objects[0].y));
+  }
+
+  // 向左扩展：旧图右移
+  {
+    const tmj = makeTMJ();
+    const regionsLayer = tmj.layers.find((l) => l.name === "regions");
+    const ri = regionsLayer.objects.length;
+    regionsLayer.objects.push({ id: 99, name: "r", x: 100, y: 200, width: 50, height: 60, properties: [] });
+
+    const SHIFT = 640;
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], SHIFT, 0);
+
+    check("向左扩展: 旧 region 的 x 平移", regionsLayer.objects[ri].x === 100 + SHIFT, String(regionsLayer.objects[ri].x));
+    check("向左扩展: 旧 region 的 y 不变", regionsLayer.objects[ri].y === 200, String(regionsLayer.objects[ri].y));
+  }
+
+  // 向右扩展：旧图不动
+  {
+    const tmj = makeTMJ();
+    const regionsLayer = tmj.layers.find((l) => l.name === "regions");
+    const ri = regionsLayer.objects.length;
+    regionsLayer.objects.push({ id: 99, name: "r", x: 100, y: 200, width: 50, height: 60, properties: [] });
+
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, 0);
+
+    check("向右扩展: 旧 region 坐标不变", regionsLayer.objects[ri].x === 100 && regionsLayer.objects[ri].y === 200);
+  }
+}
+
+// ─── 8. 长条形新区的分块解析 ────────────────────────────────────────────────
+//
+// 垂直扩展时新区是 3200x640 的长条，缩到 768 后只剩 154 高，
+// 视觉模型在这种比例下会退化，把整个新区当成一个区域返回。
+// 所以长条要切成接近方形的块分别定位。
+{
+  console.log("\n=== 8. 长条形新区分块 ===");
+
+  const plan = planTileSlices;
+
+  // 接近方形：不用切
+  check(
+    "近方形不切块",
+    plan(640, 720).length === 1,
+    String(plan(640, 720).length),
+  );
+
+  // 长条（垂直扩展的新区）：按宽度切
+  const wide = plan(3200, 640);
+  check("3200x640 切成多块", wide.length > 1, String(wide.length));
+  check("每块宽度接近高度", wide.every((s) => s.height === 640 && s.width <= 640 * 1.5), JSON.stringify(wide.map(s=>s.width)));
+  check(
+    "切块覆盖整个新区宽度",
+    wide.reduce((sum, s) => sum + s.width, 0) === 3200,
+    String(wide.reduce((sum, s) => sum + s.width, 0)),
+  );
+  check("切块首尾相接无缝隙", wide[0].left === 0 && wide.every((s, i) => i === 0 || s.left === wide[i - 1].left + wide[i - 1].width));
+  check(
+    "每块比例在 0.5~2 之间（模型定位不退化）",
+    wide.every((s) => {
+      const a = s.width / s.height;
+      return a >= 0.5 && a <= 2;
+    }),
+    JSON.stringify(wide.map((s) => (s.width / s.height).toFixed(2))),
+  );
+
+  // 高条（横向扩展、地图本身很高的情况）：按高度切
+  const tall = plan(640, 3200);
+  check("640x3200 切成多块", tall.length > 1, String(tall.length));
+  check(
+    "高条切块覆盖整个高度",
+    tall.reduce((sum, s) => sum + s.height, 0) === 3200,
+  );
+
+  // ── 同一区域在多块里被返回时只保留一份 ──
+  {
+    const designed = [
+      { id: "a", name: "区域A", description: "" },
+      { id: "b", name: "区域B", description: "" },
+    ];
+    // 视觉在两块里都返回了区域A（分块时的典型重复）
+    const parsed = [
+      { id: "a", name: "区域A", topLeft: { x: 0, y: 0 }, bottomRight: { x: 10, y: 10 } },
+      { id: "a", name: "区域A", topLeft: { x: 50, y: 50 }, bottomRight: { x: 60, y: 60 } },
+    ];
+    const items = reconcileDesignedItems(
+      parsed,
+      designed,
+      "region",
+      (b) => b,
+      { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } },
+      { allowOrderFallback: false },
+    );
+    check("重复区域只保留一份", items.filter((i) => i.id === "a").length === 1, String(items.length));
+    check("保留的是第一次匹配到的坐标", items.find((i) => i.id === "a").topLeft.x === 0);
+  }
+
+  // ── 分块模式下禁用顺序兜底（避免坐标安到错的区域）──
+  {
+    const designed = [
+      { id: "a", name: "区域A", description: "" },
+      { id: "b", name: "区域B", description: "" },
+    ];
+    // 视觉返回了一个完全陌生的条目
+    const parsed = [{ id: "zzz", name: "不认识的东西", topLeft: { x: 1, y: 1 }, bottomRight: { x: 2, y: 2 } }];
+    const items = reconcileDesignedItems(
+      parsed,
+      designed,
+      "region",
+      (b) => b,
+      { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } },
+      { allowOrderFallback: false },
+    );
+    check(
+      "分块模式下陌生条目不占用设计项",
+      !items.some((i) => i.id === "a" && i.topLeft.x === 1),
+      "陌生条目不应把坐标安到设计项 A 上",
+    );
+    check(
+      "陌生条目被跳过后设计项走占位框",
+      items.filter((i) => i.id === "b").length === 1,
+    );
+    check(
+      "被占位框兜底的区域用的是占位坐标而非模型坐标",
+      items.find((i) => i.id === "a").topLeft.x === 0 && items.find((i) => i.id === "a").bottomRight.x === 1,
+      JSON.stringify(items.find((i) => i.id === "a")),
+    );
+  }
+
+  // ── 提示词在分块模式下要求跳过不在本块的区域 ──
+  {
+    const p1 = buildVisionCoordinatePrompt({
+      imgW: 768,
+      imgH: 154,
+      regions: [{ id: "region_1", name: "区域A", description: "x" }],
+      elements: [],
+    });
+    const p2 = buildVisionCoordinatePrompt({
+      imgW: 768,
+      imgH: 154,
+      regions: [{ id: "region_1", name: "区域A", description: "x" }],
+      elements: [],
+      sliceNote: true,
+    });
+    check("单块提示词没有跳过说明", !p1.includes("直接跳过"));
+    check("分块提示词要求跳过不在本块的区域", p2.includes("直接跳过"));
+    check("分块提示词仍然声明了尺寸", p2.includes("768×154"), p2.slice(0, 80));
+    check("提示词把 id 给了模型", p2.includes('id="region_1"'));
+    check("提示词要求原样回填 id", p2.includes("原样使用上面给出的 id"));
+  }
+
+  // ── 视觉模型把 id 音译了时，按名字兜底 ──
+  {
+    const designed = [{ id: "green_bamboo_grove", name: "青竹林", description: "" }];
+    // 模型自己编了个拼音 id
+    const parsed = [
+      { id: "qingzhulin", name: "青竹林", topLeft: { x: 10, y: 20 }, bottomRight: { x: 30, y: 40 } },
+    ];
+    const items = reconcileDesignedItems(
+      parsed,
+      designed,
+      "region",
+      (b) => b,
+      { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } },
+      { allowOrderFallback: false },
+    );
+    check(
+      "id 音译后按名字匹配成功",
+      items.length === 1 && items[0].id === "green_bamboo_grove",
+      JSON.stringify(items.map((i) => i.id)),
+    );
+    check(
+      "匹配成功时保留模型给的坐标",
+      items[0] && items[0].topLeft.x === 10 && items[0].bottomRight.y === 40,
+      JSON.stringify(items[0]),
+    );
+  }
+
+  // ── 设计阶段同名区域去重 ──
+  {
+    const design = normalizeExpandDesign({
+      regions: [
+        { id: "qingzhulin", name: "青竹林", description: "a" },
+        { id: "green_bamboo_grove", name: "青竹林", description: "b" },
+        { id: "other", name: "别的地方", description: "c" },
+      ],
+      interactiveElements: [],
+    });
+    check(
+      "同名区域被去重",
+      design.regions.filter((r) => r.name === "青竹林").length === 1,
+      String(design.regions.length),
+    );
+    check("去重后保留第一个 id", design.regions[0].id === "qingzhulin", design.regions[0].id);
+    check("不同名的区域不受影响", design.regions.length === 2, String(design.regions.length));
+  }
 }
 
 console.log("\n" + (failures === 0 ? "全部通过 ✅" : failures + " 项失败 ❌"));

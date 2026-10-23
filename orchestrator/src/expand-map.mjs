@@ -34,21 +34,32 @@ import {
   formatContinuationHint,
   generateMapTile,
   resizeTo,
+  EXPANSION_GEOMETRY,
 } from "./map-tile-generator.mjs";
 import { buildMainAreaPoints } from "./main-area-points.mjs";
 
-/** 新地图块相对旧地图的扩展宽度（像素） */
-const TILE_WIDTH = 640;
-/** 扩展方向 */
-const EXPAND_DIRECTION = "right";
+/** 新地图块在扩展方向上的厚度（像素） */
+const TILE_EXTENT = 640;
 
-export async function expandMap(worldDir, userPrompt) {
+/**
+ * 扩展方向。
+ *
+ * 之前固定为 "right"，所以地图永远只能横向生长成一条长条。
+ * 现在支持 4 个方向：用户可以指定，不指定时由 LLM 根据地图内容自动判断
+ * （见 chooseExpansionSide）。
+ */
+export const EXPANSION_SIDES = ["right", "left", "bottom", "top"];
+
+export async function expandMap(worldDir, userPrompt, options = {}) {
   const mapDir = join(worldDir, "map");
   const configDir = join(worldDir, "config");
+  // 用户指定的扩展方向；"auto" 表示交给 LLM 判断
+  const requestedSide = options.side && options.side !== "auto" ? options.side : null;
 
   console.log("[ExpandMap] Starting map expansion...");
   console.log("[ExpandMap] World dir: " + worldDir);
   console.log("[ExpandMap] User prompt: " + userPrompt);
+  console.log("[ExpandMap] Requested side: " + (requestedSide ?? "auto"));
 
   // ── 1. 读取现有 TMJ ────────────────────────────────────────────────────────
   const tmjPath = join(mapDir, "06-final.tmj");
@@ -119,12 +130,39 @@ export async function expandMap(worldDir, userPrompt) {
   const styleHint = formatStyleHint(style);
   console.log("[ExpandMap] Style extracted: " + (style.artStyle || "(none)"));
 
-  // ── 5. LLM 设计扩展方案 ────────────────────────────────────────────────────
+  // ── 5. 决定扩展方向 ────────────────────────────────────────────────────────
+  //
+  // 用户指定了就用它；没指定就分析地图的四个边缘，让 LLM 挑一个最合适的。
+  // 挑边的依据是「哪条边缘看起来还没画完、可以往外接」——
+  // 比如边缘上有一条路正好断在边界外，说明那边还没铺完。
+  let expandSide = requestedSide;
+  if (!expandSide) {
+    console.log("[ExpandMap] Auto-selecting expansion side...");
+    try {
+      expandSide = await chooseExpansionSide(originalMap, {
+        existingRegions,
+        userPrompt,
+        geminiProVisionJSON,
+      });
+    } catch (e) {
+      console.warn("[ExpandMap] Side selection failed (" + e.message + "), falling back to right");
+      expandSide = "right";
+    }
+  }
+  if (!EXPANSION_SIDES.includes(expandSide)) {
+    throw new Error(`Invalid expansion side: ${expandSide}`);
+  }
+  const sideGeom = EXPANSION_GEOMETRY[expandSide];
+  console.log("[ExpandMap] Expanding " + sideGeom.directionLabel);
+
+  // ── 6. LLM 设计扩展方案 ────────────────────────────────────────────────────
   const expandPrompt = buildExpandPrompt({
     existingRegions,
     worldName: worldConfig.worldName,
     worldDescription: worldConfig.worldDescription,
     userPrompt,
+    side: expandSide,
+    directionLabel: sideGeom.directionLabel,
   });
 
   console.log("[ExpandMap] Calling LLM for expansion design...");
@@ -158,13 +196,13 @@ export async function expandMap(worldDir, userPrompt) {
     throw new Error("LLM returned no new regions to add");
   }
 
-  // ── 6. 用 outpainting 生成新地图块 ─────────────────────────────────────────
+  // ── 7. 用 outpainting 生成新地图块 ─────────────────────────────────────────
   console.log("[ExpandMap] Analyzing edge continuation...");
 
   // 风格锚定只描述「画风」，不描述「边界上有什么正在穿过去」。
   // 要让新区看起来是同一个地方，必须额外分析旧图边缘：
   // 旧图右边缘如果有一条路延伸出画面，新区就得有同一条路接上。
-  const edgeAnalysis = await analyzeEdgeContinuation(originalMap, EXPAND_DIRECTION, {
+  const edgeAnalysis = await analyzeEdgeContinuation(originalMap, expandSide, {
     geminiProVisionJSON,
   });
   const continuationHint = formatContinuationHint(edgeAnalysis);
@@ -183,8 +221,8 @@ export async function expandMap(worldDir, userPrompt) {
       userPrompt,
       worldName: worldConfig.worldName,
     }),
-    side: EXPAND_DIRECTION,
-    tileWidth: TILE_WIDTH,
+    side: expandSide,
+    extent: TILE_EXTENT,
     generateImage,
   });
 
@@ -229,7 +267,18 @@ export async function expandMap(worldDir, userPrompt) {
     console.log(
       "[ExpandMap] Grid resized: " + tmj.width + "x" + tmj.height + " -> " + newGridW + "x" + newGridH,
     );
-    resizeCollisionGrid(tmj, tmj.width, tmj.height, newGridW, newGridH);
+    // 旧网格在完整地图里的偏移：向左扩要右移，向上扩要下移
+    const gridOffsetX = expandSide === "left" ? newGridW - tmj.width : 0;
+    const gridOffsetY = expandSide === "top" ? newGridH - tmj.height : 0;
+    resizeCollisionGrid(
+      tmj,
+      tmj.width,
+      tmj.height,
+      newGridW,
+      newGridH,
+      gridOffsetX,
+      gridOffsetY,
+    );
     tmj.width = newGridW;
     tmj.height = newGridH;
     const bgLayer = tmj.layers.find((l) => l.name === "background");
@@ -240,7 +289,12 @@ export async function expandMap(worldDir, userPrompt) {
   }
 
   // 网格必须先扩容，再清碰撞——新区域的像素坐标落在旧网格之外
-  const mergedTMJ = mergeTMJIncremental(tmj, parsedNewRegions, newObjects);
+  //
+  // 向左/向上扩展时旧图在画布里整体右移/下移，旧 region 与物件的像素坐标
+  // 也要跟着平移，否则它们会标注到新区的位置上。
+  const shiftX = expandSide === "left" ? newMeta.width - originalMeta.width : 0;
+  const shiftY = expandSide === "top" ? newMeta.height - originalMeta.height : 0;
+  const mergedTMJ = mergeTMJIncremental(tmj, parsedNewRegions, newObjects, shiftX, shiftY);
 
   writeFileSync(tmjPath, JSON.stringify(mergedTMJ, null, 2));
   console.log("[ExpandMap] Merged TMJ written to " + tmjPath);
@@ -290,6 +344,8 @@ function buildExpandPrompt(opts) {
     .map((r) => "- " + r.name + "（" + r.id + "）: " + (r.description || r.type || "功能区"))
     .join("\n");
 
+  const directionLabel = opts.directionLabel || "向右";
+
   return (
     '当前世界"' +
     opts.worldName +
@@ -307,7 +363,9 @@ function buildExpandPrompt(opts) {
     "## 用户想添加的内容\n" +
     opts.userPrompt +
     "\n\n" +
-    "请设计地图扩展方案。新增区域会出现在现有地图的【右侧】，作为全新的地块。\n\n" +
+    "请设计地图扩展方案。新增区域会出现在现有地图的【" +
+    directionLabel +
+    "】，作为全新的地块。\n\n" +
     "必须严格按照以下 JSON 格式返回（不要使用其他键名）：\n" +
     "{\n" +
     '  "mapDescription": "扩展后的完整地图描述",\n' +
@@ -324,6 +382,85 @@ function buildExpandPrompt(opts) {
     '  "newInteractiveElements": []\n' +
     "}"
   );
+}
+
+/**
+ * 自动选择扩展方向。
+ *
+ * 把地图的四条边缘各截一条，拼成一张「十字」对照图交给视觉模型，
+ * 让它挑一条最自然的边——通常是那条看起来「还没画完」、有道路或水系
+ * 正好断在边界上的边。
+ *
+ * 比四次单独调用便宜，也比让它凭空猜更准。
+ */
+async function chooseExpansionSide(mapBuffer, { existingRegions, userPrompt, geminiProVisionJSON }) {
+  const sharp = (await import("sharp")).default;
+  const meta = await sharp(mapBuffer).metadata();
+  const W = meta.width;
+  const H = meta.height;
+
+  const STRIP = 180;
+  const sw = Math.min(STRIP, W);
+  const sh = Math.min(STRIP, H);
+
+  // 四条边缘条带，统一缩放到 256 长边
+  const strips = {
+    top: await sharp(mapBuffer)
+      .extract({ left: 0, top: 0, width: W, height: sh })
+      .resize({ width: 256, height: 256, fit: "inside" })
+      .toBuffer(),
+    bottom: await sharp(mapBuffer)
+      .extract({ left: 0, top: H - sh, width: W, height: sh })
+      .resize({ width: 256, height: 256, fit: "inside" })
+      .toBuffer(),
+    left: await sharp(mapBuffer)
+      .extract({ left: 0, top: 0, width: sw, height: H })
+      .resize({ width: 256, height: 256, fit: "inside" })
+      .toBuffer(),
+    right: await sharp(mapBuffer)
+      .extract({ left: W - sw, top: 0, width: sw, height: H })
+      .resize({ width: 256, height: 256, fit: "inside" })
+      .toBuffer(),
+  };
+
+  // 拼成 2x2 对照图：左上=上，右上=下，左下=左，右下=右
+  const cell = 256;
+  const collage = await sharp({
+    create: { width: cell * 2, height: cell * 2, channels: 3, background: { r: 20, g: 20, b: 20 } },
+  })
+    .composite([
+      { input: strips.top, left: 0, top: 0 },
+      { input: strips.bottom, left: cell, top: 0 },
+      { input: strips.left, left: 0, top: cell },
+      { input: strips.right, left: cell, top: cell },
+    ])
+    .png()
+    .toBuffer();
+
+  const regionNames = (existingRegions || []).map((r) => r.name).join("、") || "（无）";
+
+  const prompt =
+    "这是一张游戏俯视地图的四条边缘，按 2x2 拼在一张图里：\n" +
+    "  左上 = 地图的上边缘（north）\n" +
+    "  右上 = 地图的下边缘（south）\n" +
+    "  左下 = 地图的左边缘（west）\n" +
+    "  右下 = 地图的右边缘（east）\n\n" +
+    "用户想在这个地图上添加内容：" + userPrompt + "\n" +
+    "地图上已有的区域：" + regionNames + "\n\n" +
+    "请挑一条【最适合向外扩展】的边缘。判断依据：\n" +
+    "- 那条边缘上是否有空间元素（道路/河道/建筑/围墙）正好延伸到边界外，像是还没画完\n" +
+    "- 哪条边界的空白更多、更适合放新内容\n" +
+    "- 要和用户想添加的内容类型相符\n\n" +
+    '返回一个 JSON：{"side": "right|left|top|bottom", "reason": "一句话说明为什么选这条边"}';
+
+  const result = await geminiProVisionJSON(prompt, [collage]);
+  const side = result?.side;
+  if (!EXPANSION_SIDES.includes(side)) {
+    console.warn("[ExpandMap] LLM returned invalid side: " + side + ", falling back to right");
+    return "right";
+  }
+  console.log("[ExpandMap] Auto-selected side: " + side + " (" + (result.reason || "") + ")");
+  return side;
 }
 
 function buildTileContentPrompt(opts) {
@@ -421,8 +558,23 @@ export function convertVisionBoxToGlobal(box, geom) {
  */
 export function buildVisionCoordinatePrompt(opts) {
   const { imgW, imgH, regions, elements } = opts;
-  const regionDesc = regions.map((r) => "- " + r.name + "：" + (r.description || "")).join("\n");
-  const elementDesc = elements.map((o) => "- " + o.name + "：" + (o.description || "")).join("\n");
+  // id 必须原样交给模型，让它回填。
+  // 之前只给了 name/description，模型只能自己编 id——它会把中文名音译成
+  // "qingzhulin" 这种拼音，而设计阶段的 id 是 "green_bamboo_grove"，
+  // 两者对不上，坐标就被整体丢弃、退化成占位框。
+  const regionDesc = regions
+    .map((r) => '- id="' + (r.id || "") + '" 名称：' + r.name + "：" + (r.description || ""))
+    .join("\n");
+  const elementDesc = elements
+    .map((o) => '- id="' + (o.id || "") + '" 名称：' + o.name + "：" + (o.description || ""))
+    .join("\n");
+  // 分块解析时，同一批区域会在每一块里被问一遍。只在当前块里出现的
+  // 才返回坐标，不在的必须跳过——否则同一个区域会在多块里各返回一次，
+  // 坐标还互相冲突。
+  const sliceNote = opts.sliceNote
+    ? "\n\n**重要**：这张图只是新地块的一部分。如果某个区域/元素并没有出现在这张图里" +
+      "（画面中完全看不到），不要返回它的坐标，直接跳过它。"
+    : "";
 
   return (
     "这是一张游戏俯视地图的一个【新地块】，尺寸：" +
@@ -433,8 +585,10 @@ export function buildVisionCoordinatePrompt(opts) {
     "## 需要定位的区域\n" +
     regionDesc +
     (elementDesc ? "\n\n## 需要定位的可交互元素\n" + elementDesc : "") +
+    sliceNote +
     "\n\n请为每个区域和元素返回它们在这张图上的像素坐标（topLeft / bottomRight 为矩形包围盒）。\n" +
-    "坐标相对于这张图的左上角 (0,0)。\n\n" +
+    "坐标相对于这张图的左上角 (0,0)。\n" +
+    "**返回的 id 必须原样使用上面给出的 id，不要翻译、不要改写、不要自己编。**\n\n" +
     "返回 JSON：\n" +
     "{\n" +
     '  "newRegions": [\n' +
@@ -447,57 +601,182 @@ export function buildVisionCoordinatePrompt(opts) {
   );
 }
 
+/**
+ * 把新区切成若干块，让视觉模型分块定位。
+ *
+ * 为什么需要分块：视觉坐标解析要把图缩到 768px 长边再送模型。
+ * 横向扩展时新区是 640x720（接近方形），缩完还剩 640x720，定位很准。
+ * 但垂直扩展时新区是 3200x640 的长条——缩完只剩 768x154，宽高比 5:1，
+ * 视觉模型在这种比例下会退化，把整个新区当成一个区域返回
+ * （实测三个区域共用同一个框）。
+ *
+ * 切成接近方形的块之后，每块的比例正常，定位精度回来了。
+ */
+export function planTileSlices(tileWidth, tileHeight, maxDim = 768) {
+  // 目标：每块缩到 maxDim 后仍接近方形
+  const aspect = tileWidth / tileHeight;
+
+  // 已经是合理比例就不用切
+  if (aspect >= 0.5 && aspect <= 2) {
+    return [{ left: 0, top: 0, width: tileWidth, height: tileHeight }];
+  }
+
+  const slices = [];
+  if (aspect > 2) {
+    // 太宽：按宽度切。块宽取「高度×1.2」，让每块接近方形。
+    // 余下的最后一块如果太窄，就并回倒数第二块——一块 200x640 的窄条
+    // 缩完只剩 40x154，模型照样会退化。
+    const targetW = Math.max(1, Math.round(tileHeight * 1.2));
+    const count = Math.ceil(tileWidth / targetW);
+    // 重新分配宽度，让每块尽量等宽（余量摊给前面的块）
+    const baseW = Math.floor(tileWidth / count);
+    const remainder = tileWidth % count;
+    let left = 0;
+    for (let i = 0; i < count; i++) {
+      const width = baseW + (i < remainder ? 1 : 0);
+      slices.push({ left, top: 0, width, height: tileHeight });
+      left += width;
+    }
+  } else {
+    // 太高：按高度切，逻辑对称
+    const targetH = Math.max(1, Math.round(tileWidth / 1.2));
+    const count = Math.ceil(tileHeight / targetH);
+    const baseH = Math.floor(tileHeight / count);
+    const remainder = tileHeight % count;
+    let top = 0;
+    for (let i = 0; i < count; i++) {
+      const height = baseH + (i < remainder ? 1 : 0);
+      slices.push({ left: 0, top, width: tileWidth, height });
+      top += height;
+    }
+  }
+  return slices;
+}
+
 async function parseNewRegionCoordinates(opts) {
   const { tileBuffer, newRegions, newObjects, tileWidth, tileHeight, offsetX, offsetY } = opts;
 
-  const small = await resizeTo(tileBuffer, 768);
-  const smallMeta = await import("sharp").then((m) => m.default(small).metadata());
-  // 实际送给视觉模型的图片尺寸（可能已被 resizeTo 缩小）
-  const imgW = smallMeta.width || tileWidth;
-  const imgH = smallMeta.height || tileHeight;
+  const sharp = (await import("sharp")).default;
 
-  const prompt = buildVisionCoordinatePrompt({
-    imgW,
-    imgH,
-    regions: newRegions,
-    elements: newObjects,
-  });
-
-  let result;
-  try {
-    result = await geminiProVisionJSON(prompt, [small], {
-      requestTimeoutMs: 300000,
-      timeoutEnvKey: "VISION_TIMEOUT_MS",
-    });
-  } catch (e) {
-    console.warn("[ExpandMap] Vision parsing failed: " + e.message);
-    result = null;
+  // 长条形新区切成多块分别定位
+  const slices = planTileSlices(tileWidth, tileHeight);
+  if (slices.length > 1) {
+    console.log(
+      "[ExpandMap] Tile is " + tileWidth + "x" + tileHeight +
+        " (aspect " + (tileWidth / tileHeight).toFixed(1) + "), splitting into " +
+        slices.length + " slices for vision",
+    );
   }
 
-  const parsedRegions = result?.newRegions || [];
-  const parsedElements = result?.newElements || [];
+  const parsedRegions = [];
+  const parsedElements = [];
+
+  for (let i = 0; i < slices.length; i++) {
+    const slice = slices[i];
+    const sliceBuffer = await sharp(tileBuffer)
+      .extract({ left: slice.left, top: slice.top, width: slice.width, height: slice.height })
+      .png()
+      .toBuffer();
+
+    const small = await resizeTo(sliceBuffer, 768);
+    const smallMeta = await sharp(small).metadata();
+    // 实际送给视觉模型的图片尺寸（可能已被 resizeTo 缩小）
+    const imgW = smallMeta.width || slice.width;
+    const imgH = smallMeta.height || slice.height;
+
+    // 这一块在新区里的原始坐标原点
+    const sliceOriginX = slice.left;
+    const sliceOriginY = slice.top;
+
+    const prompt = buildVisionCoordinatePrompt({
+      imgW,
+      imgH,
+      regions: newRegions,
+      elements: newObjects,
+      sliceNote: slices.length > 1,
+    });
+
+    let result = null;
+    try {
+      result = await geminiProVisionJSON(prompt, [small], {
+        requestTimeoutMs: 300000,
+        timeoutEnvKey: "VISION_TIMEOUT_MS",
+      });
+    } catch (e) {
+      console.warn("[ExpandMap] Vision parsing failed on slice " + (i + 1) + ": " + e.message);
+    }
+
+    if (!result) continue;
+
+    // 块内坐标 -> 新区坐标 -> 全局坐标
+    const geom = {
+      imgW,
+      imgH,
+      tileWidth: slice.width,
+      tileHeight: slice.height,
+      offsetX: offsetX + sliceOriginX,
+      offsetY: offsetY + sliceOriginY,
+    };
+    const toGlobal = (box) => convertVisionBoxToGlobal(box, geom);
+
+    for (const r of result.newRegions || []) {
+      parsedRegions.push({ ...r, topLeft: toGlobal(r.topLeft), bottomRight: toGlobal(r.bottomRight) });
+    }
+    for (const e of result.newElements || []) {
+      parsedElements.push({ ...e, topLeft: toGlobal(e.topLeft), bottomRight: toGlobal(e.bottomRight) });
+    }
+
+    console.log(
+      "[ExpandMap] Slice " + (i + 1) + "/" + slices.length +
+        " parsed " + ((result.newRegions || []).length) + " regions, " +
+        ((result.newElements || []).length) + " elements",
+    );
+  }
+
   console.log(
     "[ExpandMap] Parsed " + parsedRegions.length + " regions, " + parsedElements.length + " elements",
   );
 
-  // 坐标换算：缩放回原尺寸 + 加偏移量 + 裁剪到新区范围内
-  // 裁剪是必需的：视觉模型偶尔会返回超出图片范围的坐标（例如把整条河流
-  // 报成从 y=0 到 y=3072，而新区实际只有 1536 高）。不裁剪的话，
-  // TMJ 里就会出现一个画布之外的 region——客户端渲染不出来，
-  // 服务端的可达性判断也会跟着错。
-  const geom = { imgW, imgH, tileWidth, tileHeight, offsetX, offsetY };
-  const toGlobal = (box) => convertVisionBoxToGlobal(box, geom);
-
-  const regions = reconcileDesignedItems(parsedRegions, newRegions, "region", toGlobal, {
-    topLeft: { x: offsetX + 40, y: offsetY + 40 },
-    bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
-  });
-  const elements = reconcileDesignedItems(parsedElements, newObjects, "element", toGlobal, {
-    topLeft: { x: offsetX + 40, y: offsetY + 40 },
-    bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
-  });
+  // ── 坐标换算已完成（上面已换算成全局坐标），这里做设计阶段的对齐与兜底。
+  //
+  // 两阶段匹配：先按 id、再按名字精确匹配（跨所有块统一做），
+  // 剩下的才按顺序配对。顺序配对必须放在统一层面——
+  // 如果每块各自兜底，块 1 的陌生条目会抢走本该属于块 3 的区域。
+  const regions = reconcileDesignedItems(
+    parsedRegions,
+    newRegions,
+    "region",
+    (b) => b,
+    {
+      topLeft: { x: offsetX + 40, y: offsetY + 40 },
+      bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
+    },
+  );
+  const elements = reconcileDesignedItems(
+    parsedElements,
+    newObjects,
+    "element",
+    (b) => b,
+    {
+      topLeft: { x: offsetX + 40, y: offsetY + 40 },
+      bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
+    },
+  );
 
   return { regions, elements };
+}
+
+/**
+ * 把名字规范化，用于跨 id 的模糊匹配。
+ * 去掉空白、标点、下划线，转小写——这样 "Green Bamboo Grove"、
+ * "green_bamboo_grove"、"green-bamboo-grove" 会归一到同一个 key。
+ */
+function normalizeKey(name) {
+  if (!name || typeof name !== "string") return "";
+  return name
+    .toLowerCase()
+    .replace(/[\s_\-·・、，,。.]/g, "")
+    .trim();
 }
 
 /**
@@ -520,31 +799,55 @@ export function reconcileDesignedItems(
   label,
   toGlobal,
   placeholderBox,
+  opts = {},
 ) {
   const matched = new Set();
+  const allowOrderFallback = opts.allowOrderFallback !== false;
 
-  const resolveDesigned = (parsedItem) => {
+  // 只从 toGlobal 的返回值里取坐标字段。
+  // 不能把整个返回值展开进 item——toGlobal 收到的是视觉返回的原始对象，
+  // 展开它会把模型自己编的 id 覆盖到设计阶段的 id 上，
+  // 于是 TMJ 里的 region id 和 world.json 里的 location id 对不上，
+  // 区域「看得见但用不了」。
+  const coordOf = (p) => {
+    const g = toGlobal(p) || {};
+    return { topLeft: g.topLeft, bottomRight: g.bottomRight };
+  };
+
+  // ── 第一阶段：精确匹配（按 id → 按名字 → 按规范化名字）────────────────────
+  const resolveExact = (parsedItem) => {
     const byId = designedItems.find((d) => d.id && d.id === parsedItem.id);
     if (byId) return byId;
     const byName = designedItems.find((d) => d.name && d.name === parsedItem.name);
     if (byName) return byName;
-    // id 和 name 都对不上时，按顺序兜底到尚未匹配的设计条目
-    const fallback = designedItems.find((d) => !matched.has(d.id));
-    if (fallback) {
-      console.warn(
-        "[ExpandMap] Vision " + label + " id/name unmatched (" + (parsedItem.name || parsedItem.id) +
-        "), falling back to designed: " + fallback.id,
-      );
-      return fallback;
+    // id 对不上但名字对得上（模型把 id 音译了，或大小写/连字符不同）
+    const normName = normalizeKey(parsedItem.name);
+    if (normName) {
+      const byNormName = designedItems.find((d) => normalizeKey(d.name) === normName);
+      if (byNormName) {
+        console.warn(
+          "[ExpandMap] Vision " + label + " id mismatch (" + parsedItem.id +
+            "), matched by name: " + byNormName.id,
+        );
+        return byNormName;
+      }
     }
     return null;
   };
 
   const items = [];
+  const unmatched = [];
+
   for (const p of parsedItems || []) {
-    const designed = resolveDesigned(p);
+    const designed = resolveExact(p);
     if (!designed) {
-      console.warn("[ExpandMap] Vision returned an unknown " + label + ", skipped: " + (p.name || p.id));
+      unmatched.push(p);
+      continue;
+    }
+    // 分块解析时同一个设计项可能在多块里各被返回一次。
+    // 只接受第一次匹配——后面块里的重复项直接丢弃，
+    // 否则同一个区域会在 TMJ 里出现多个框。
+    if (matched.has(designed.id)) {
       continue;
     }
     matched.add(designed.id);
@@ -553,8 +856,44 @@ export function reconcileDesignedItems(
       name: designed.name,
       description: designed.description || "",
       type: designed.type || "outdoor",
-      ...toGlobal(p),
+      ...coordOf(p),
     });
+  }
+
+  // ── 第二阶段：剩下的按顺序配对 ────────────────────────────────────────────
+  //
+  // 精确匹配全做完之后才做顺序兜底：如果每块各自兜底，块 1 的陌生条目
+  // 会抢走本该属于块 3 的区域。现在顺序兜底只在统一层面发生。
+  if (unmatched.length > 0 && allowOrderFallback) {
+    const remaining = (designedItems || []).filter((d) => !matched.has(d.id));
+    for (let i = 0; i < unmatched.length; i++) {
+      const p = unmatched[i];
+      const designed = remaining[i];
+      if (!designed) {
+        console.warn(
+          "[ExpandMap] Vision returned an unknown " + label + ", skipped: " + (p.name || p.id),
+        );
+        continue;
+      }
+      console.warn(
+        "[ExpandMap] Vision " + label + " id/name unmatched (" + (p.name || p.id) +
+          "), paired by order with: " + designed.id,
+      );
+      matched.add(designed.id);
+      items.push({
+        ...designed,
+        name: designed.name,
+        description: designed.description || "",
+        type: designed.type || "outdoor",
+        ...coordOf(p),
+      });
+    }
+  } else {
+    for (const p of unmatched) {
+      console.warn(
+        "[ExpandMap] Vision returned an unknown " + label + ", skipped: " + (p.name || p.id),
+      );
+    }
   }
 
   // 视觉漏掉的条目用占位框兜底，保证不会静默丢失
@@ -577,10 +916,34 @@ export function reconcileDesignedItems(
 
 // ─── TMJ merge ──────────────────────────────────────────────────────────────
 
-export function mergeTMJIncremental(tmj, parsed, newObjects) {
+/**
+ * 增量合并 TMJ：追加新区域/物件，并按扩展方向平移旧对象。
+ *
+ * 向左/向上扩展时，新区插在旧图的前面，旧图在完整画布里的位置就变了
+ * （整体右移或下移）。旧 region / interactive_object 的像素坐标必须跟着平移，
+ * 否则它们会标注到新区的位置上——客户端会显示错位的区域框。
+ *
+ * @param {object} tmj - TMJ 对象（原地修改）
+ * @param {object} parsed - { regions: [...], elements: [...] }，已是全局坐标
+ * @param {object[]} newObjects - 设计阶段的新物件
+ * @param {number} shiftX - 旧对象要平移的 x 像素（向左扩展时为正）
+ * @param {number} shiftY - 旧对象要平移的 y 像素（向上扩展时为正）
+ */
+export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY = 0) {
   const regionsLayer = tmj.layers.find((l) => l.name === "regions");
   const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
   const collisionLayer = tmj.layers.find((l) => l.name === "collision");
+
+  // ── 平移旧对象 ─────────────────────────────────────────────────────────────
+  if (shiftX !== 0 || shiftY !== 0) {
+    for (const layer of [regionsLayer, objectsLayer]) {
+      if (!layer?.objects) continue;
+      for (const obj of layer.objects) {
+        obj.x = (obj.x ?? 0) + shiftX;
+        obj.y = (obj.y ?? 0) + shiftY;
+      }
+    }
+  }
 
   let maxId = 0;
   for (const layer of tmj.layers) {
@@ -662,14 +1025,37 @@ export function mergeTMJIncremental(tmj, parsed, newObjects) {
 }
 
 /** 画布变宽后，把碰撞层数据搬进新的网格，旧区域数据保持不变 */
-export function resizeCollisionGrid(tmj, oldW, oldH, newW, newH) {
+/**
+ * 扩容碰撞网格，把旧数据搬到新的正确位置。
+ *
+ * 旧网格在完整地图里的位置随扩展方向而变：
+ *   right / bottom —— 旧图在左上角，新区在右侧/下方，偏移为 (0, 0)
+ *   left          —— 新区在左侧，旧图要整体右移 offsetX 格
+ *   top           —— 新区在上方，旧图要整体下移 offsetY 格
+ *
+ * 之前不管什么方向都把旧数据留在左上角，于是向左/向上扩展时，
+ * 碰撞数据和背景图对不上——角色会在图上「撞墙」，但那里其实没有墙。
+ *
+ * @param {object} tmj - TMJ 对象（原地修改）
+ * @param {number} oldW - 旧网格宽
+ * @param {number} oldH - 旧网格高
+ * @param {number} newW - 新网格宽
+ * @param {number} newH - 新网格高
+ * @param {number} offsetX - 旧网格在新网格中的 x 偏移（格）
+ * @param {number} offsetY - 旧网格在新网格中的 y 偏移（格）
+ */
+export function resizeCollisionGrid(tmj, oldW, oldH, newW, newH, offsetX = 0, offsetY = 0) {
   const layer = tmj.layers.find((l) => l.name === "collision");
   if (!layer?.data) return;
   const oldData = layer.data;
+  // 新增出来的格子默认是障碍（1），引导玩家走新区域
   const newData = new Array(newW * newH).fill(1);
-  for (let y = 0; y < Math.min(oldH, newH); y++) {
-    for (let x = 0; x < Math.min(oldW, newW); x++) {
-      newData[y * newW + x] = oldData[y * oldW + x];
+  for (let y = 0; y < oldH; y++) {
+    for (let x = 0; x < oldW; x++) {
+      const nx = x + offsetX;
+      const ny = y + offsetY;
+      if (nx < 0 || ny < 0 || nx >= newW || ny >= newH) continue;
+      newData[ny * newW + nx] = oldData[y * oldW + x];
     }
   }
   layer.data = newData;
@@ -778,15 +1164,26 @@ export function rebuildMainAreaPoints(tmj) {
 // ─── CLI ────────────────────────────────────────────────────────────────────
 
 if (process.argv[1]?.endsWith("expand-map.mjs")) {
+  // 参数位置固定：<worldDir> <side> <userPrompt...>
+  // side 是扩展方向（right/left/top/bottom/auto），auto 表示交给 LLM 判断。
+  // 固定位置而不是靠「最后一个参数是不是方向名」来猜——userPrompt 含空格时
+  // 会把 prompt 里的普通词误判成方向。
   const worldDir = process.argv[2];
-  const userPrompt = process.argv.slice(3).join(" ");
+  const sideArg = process.argv[3] || "auto";
+  const userPrompt = process.argv.slice(4).join(" ");
 
   if (!worldDir || !userPrompt) {
-    console.error("Usage: node expand-map.mjs <worldDir> <userPrompt>");
+    console.error("Usage: node expand-map.mjs <worldDir> <side> <userPrompt>");
+    process.exit(1);
+  }
+  if (!EXPANSION_SIDES.includes(sideArg) && sideArg !== "auto") {
+    console.error(
+      "Invalid side: " + sideArg + " (expected one of " + EXPANSION_SIDES.join(", ") + " or auto)",
+    );
     process.exit(1);
   }
 
-  expandMap(worldDir, userPrompt)
+  expandMap(worldDir, userPrompt, { side: sideArg })
     .then((result) => {
       console.log("\n[ExpandMap] Success!");
       console.log(JSON.stringify(result, null, 2));
