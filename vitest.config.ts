@@ -7,6 +7,7 @@ export default defineConfig({
       "server/src/**/*.test.ts",
       "client/src/**/*.test.ts",
       "orchestrator/src/**/*.test.ts",
+      "packages/*/src/**/*.test.ts",
     ],
     environment: "node",
     globals: false,
@@ -14,7 +15,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text-summary", "html"],
-      include: ["server/src/**/*.ts", "client/src/**/*.ts"],
+      include: ["server/src/**/*.ts", "client/src/**/*.ts", "packages/*/src/**/*.ts"],
       exclude: [
         "**/*.test.ts",
         "**/node_modules/**",

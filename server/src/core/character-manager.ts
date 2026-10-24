@@ -4,24 +4,28 @@ import type {
   GameTime,
   SimulationEvent,
   DiaryEntry,
+  Storage,
 } from "../types/index.js";
 import type { WorldManager } from "./world-manager.js";
 import { loadCharacterProfiles, writeCharacterProfile, invalidateCharacterProfileCache } from "../utils/config-loader.js";
 import { generateId } from "../utils/id-generator.js";
 import * as charStateStore from "../store/character-state-store.js";
-import { MemoryManager } from "./memory-manager.js";
+import { MemoryManager } from "@worldx/core";
 import { decayNeeds } from "./needs-manager.js";
 import { decayEmotion } from "./emotion-manager.js";
-import { getDb } from "../store/db.js";
 import * as memoryStore from "../store/memory-store.js";
+import * as diaryStore from "../store/diary-store.js";
+import { createDefaultStorage } from "../store/storage-adapter.js";
 
 export class CharacterManager {
   memoryManager: MemoryManager;
 
   private profiles: Map<string, CharacterProfile> = new Map();
+  private storage: Storage;
 
-  constructor(private worldManager: WorldManager) {
-    this.memoryManager = new MemoryManager();
+  constructor(private worldManager: WorldManager, storage?: Storage) {
+    this.storage = storage ?? createDefaultStorage();
+    this.memoryManager = new MemoryManager(this.storage.memories);
   }
 
   initialize(): void {
@@ -287,43 +291,14 @@ export class CharacterManager {
       content,
     };
 
-    getDb()
-      .prepare(
-        `INSERT INTO diary_entries (id, character_id, game_day, content) VALUES (?, ?, ?, ?)`,
-      )
-      .run(entry.id, entry.characterId, entry.gameDay, entry.content);
+    this.storage.diaries.addDiaryEntry(entry);
 
     return entry;
   }
 
   getDiaryEntries(charId: string, gameDay?: number): DiaryEntry[] {
-    if (gameDay !== undefined) {
-      return (
-        getDb()
-          .prepare(
-            "SELECT * FROM diary_entries WHERE character_id = ? AND game_day = ? ORDER BY rowid",
-          )
-          .all(charId, gameDay) as any[]
-      ).map(rowToDiary);
-    }
-
-    return (
-      getDb()
-        .prepare(
-          "SELECT * FROM diary_entries WHERE character_id = ? ORDER BY game_day, rowid",
-        )
-        .all(charId) as any[]
-    ).map(rowToDiary);
+    return this.storage.diaries.getDiaryEntries(charId, gameDay);
   }
-}
-
-function rowToDiary(row: any): DiaryEntry {
-  return {
-    id: row.id,
-    characterId: row.character_id,
-    gameDay: row.game_day,
-    content: row.content,
-  };
 }
 
 function buildInitialCharacterState(

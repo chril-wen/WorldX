@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decayNeeds } from "./needs-manager.js";
-import type { CharacterState, CharacterProfile } from "../types/index.js";
+import type { CharacterState, CharacterProfile } from "../contracts/index.js";
 
 function makeState(overrides: Partial<CharacterState> = {}): CharacterState {
   return {

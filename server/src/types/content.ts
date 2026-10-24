@@ -1,11 +1,2 @@
-export interface ContentCandidate {
-  id: string;
-  eventId: string;
-  type: "highlight" | "quote" | "summary";
-  dramScore: number;
-  content: string;
-  characterId?: string;
-  context?: string;
-  tags: string[];
-  reviewed: boolean;
-}
+// 类型定义已迁到 @worldx/core/contracts —— 这里保留 re-export，既有 import 路径不破。
+export * from "@worldx/core/contracts/content.js";

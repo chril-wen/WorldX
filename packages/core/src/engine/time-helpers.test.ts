@@ -14,7 +14,7 @@ import {
   tickToSceneTime,
   tickToSceneTimeWithPeriod,
   type SceneTimeConfig,
-} from "./time-helpers";
+} from "./time-helpers.js";
 
 const ORIGINAL = getSceneConfig();
 
