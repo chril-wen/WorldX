@@ -109,8 +109,13 @@ export class MemoryManager {
 
     const results = scored.slice(0, topK).map((s) => s.memory);
 
+    // 访问次数既写回 DB，也要同步更新缓存里的对象 ——
+    // 否则缓存里的 accessCount 永远停在旧值，每次检索都算成 0 + 1 = 1，
+    // 累计访问次数这条分支（consolidation 的 accessCount >= 3）永远走不到。
     for (const m of results) {
-      memoryStore.updateMemory(m.id, { accessCount: m.accessCount + 1 });
+      const next = m.accessCount + 1;
+      memoryStore.updateMemory(m.id, { accessCount: next });
+      m.accessCount = next;
     }
 
     return results;
@@ -154,6 +159,10 @@ export class MemoryManager {
         memoryStore.updateMemory(m.id, { isLongTerm: true });
       }
     }
+
+    // 跟 processMemoryDecay 一样：DB 改了就得丢掉缓存，
+    // 否则缓存里还是 isLongTerm=false 的旧对象。
+    this.cache.delete(characterId);
   }
 
   getRecentMemories(characterId: string, limit: number): MemoryEntry[] {

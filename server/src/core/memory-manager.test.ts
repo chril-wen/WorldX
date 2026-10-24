@@ -181,13 +181,9 @@ describe("MemoryManager", () => {
       expect(found!.isLongTerm).toBe(true);
     });
 
-    // 已知 BUG（阶段 0 不改业务逻辑，用 it.fails 锁住）：
-    // retrieveMemories 从缓存读 accessCount，写回 DB 时用 m.accessCount + 1，
-    // 但缓存里的对象没被同步更新 —— 所以每次检索都算成 0 + 1 = 1，
-    // accessCount 永远停在 1，processMemoryConsolidation 的
-    // `accessCount >= 3` 分支通过正常检索路径永远走不到。
-    // 修好之后这个用例会失败，那正是提醒我们摘掉 it.fails 的信号。
-    it.fails("访问次数 >= 3 转为长期记忆（已知 bug：accessCount 停在 1）", () => {
+    // 曾经是 it.fails：retrieveMemories 从缓存读 accessCount 却没同步更新缓存对象，
+    // 导致 accessCount 永远停在 1，这条路径走不到。已修（缓存与 DB 一起更新）。
+    it("访问次数 >= 3 转为长期记忆", () => {
       const mgr = new MemoryManager();
       const m = add(mgr, { importance: 1 });
       for (let i = 0; i < 3; i++) {

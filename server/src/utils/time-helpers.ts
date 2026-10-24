@@ -65,7 +65,13 @@ export function isBoundedScene(config?: SceneTimeConfig): boolean {
 
 export function getNaturalDayTicks(config?: SceneTimeConfig): number {
   const c = config || currentSceneConfig;
-  return Math.max(1, Math.round((24 * 60) / c.tickDurationMinutes));
+  // tickDurationMinutes <= 0 会让除法出 NaN 或 Infinity ——
+  // 而 Math.max(1, NaN) 是 NaN，Math.max(1, Infinity) 是 Infinity，
+  // 两者都会让「一天有多少 tick」变成一个没有意义的数，
+  // 按它循环的逻辑会跑不完或直接崩。先把分母兜住。
+  const minutes = c.tickDurationMinutes;
+  if (!Number.isFinite(minutes) || minutes <= 0) return 1;
+  return Math.max(1, Math.round((24 * 60) / minutes));
 }
 
 export function getSceneTickLimit(config?: SceneTimeConfig): number {

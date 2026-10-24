@@ -198,12 +198,18 @@ describe("time-helpers", () => {
       expect(getNaturalDayTicks(cfg({ tickDurationMinutes: 1440 }))).toBe(1);
     });
 
-    // 已知 BUG（阶段 0 不改业务逻辑，用 it.fails 锁住）：
-    // getNaturalDayTicks 是 Math.max(1, Math.round((24*60) / tickDurationMinutes))，
-    // tickDurationMinutes = 0 时除出 Infinity，Math.max(1, Infinity) 还是 Infinity ——
-    // 「至少为 1」的兜底对 0 无效。tick 上限变成 Infinity 会让按上限循环的逻辑跑不完。
-    it.fails("tick 时长为 0 时应回落到 1（已知 bug：算出 Infinity）", () => {
+    // 曾经是 it.fails：分母为 0 时除出 Infinity，「至少为 1」的兜底对 0 无效。
+    // 已修（分母先兜住再算）。
+    it("tick 时长为 0 时回落到 1", () => {
       expect(getNaturalDayTicks(cfg({ tickDurationMinutes: 0 }))).toBe(1);
+    });
+
+    it("tick 时长为负数时也回落到 1", () => {
+      expect(getNaturalDayTicks(cfg({ tickDurationMinutes: -15 }))).toBe(1);
+    });
+
+    it("tick 时长为 NaN 时回落到 1（不能是 NaN）", () => {
+      expect(getNaturalDayTicks(cfg({ tickDurationMinutes: NaN }))).toBe(1);
     });
   });
 
