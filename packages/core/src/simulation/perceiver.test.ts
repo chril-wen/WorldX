@@ -1,22 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { buildPerception } from "./perceiver.js";
-import type { WorldManager } from "../core/world-manager.js";
-import type { CharacterManager } from "../core/character-manager.js";
-import type { GameTime } from "../types/index.js";
-
-// eventStore 走 SQLite，perceiver 只需要它返回空数组 —— 用 mock 隔离，
-// 让这个用例只测「感知装配」这一层逻辑。
-vi.mock("../store/event-store.js", () => ({
-  queryEvents: () => [],
-}));
-
-vi.mock("../core/weather-manager.js", () => ({
-  getWeatherState: () => ({ kind: "clear", sinceAbsTick: 0 }),
-  describeWeatherFor: () => "晴",
-  resolveExposure: () => "outdoor",
-}));
+import type { WorldManager } from "../engine/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
+import type { GameTime } from "../contracts/index.js";
+import type { EventStorage } from "../contracts/events.js";
+import type { WeatherState } from "../engine/weather-manager.js";
 
 const gameTime: GameTime = { day: 1, tick: 10 };
+
+// 事件存储与天气现在都是参数 —— 直接给个空的，不用 mock 模块。
+const emptyEventStore = {
+  queryEvents: () => [],
+} as unknown as EventStorage;
+
+const clearWeather = { kind: "clear", sinceAbsTick: 0 } as WeatherState;
 
 function makeWorldManager(overrides: Partial<WorldManager> = {}): WorldManager {
   return {
@@ -71,14 +68,10 @@ function makeState(id: string, overrides: Partial<any> = {}) {
 }
 
 describe("buildPerception", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("位置不存在时返回最小感知而不是抛错", () => {
     const wm = makeWorldManager({ getLocation: () => undefined });
     const cm = makeCharacterManager([makeState("c1")]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.currentLocation).toBe("main_area");
     expect(p.locationDescription).toBe("");
     expect(p.objectsHere).toEqual([]);
@@ -88,7 +81,7 @@ describe("buildPerception", () => {
   it("返回地点名称与描述", () => {
     const wm = makeWorldManager();
     const cm = makeCharacterManager([makeState("c1")]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.currentLocation).toBe("茶馆");
     expect(p.locationDescription).toBe("一间热闹的茶馆");
   });
@@ -99,7 +92,7 @@ describe("buildPerception", () => {
       makeState("c1"),
       makeState("c2", { emotionValence: 3, emotionArousal: 8 }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.charactersHere.map((c) => c.id)).toEqual(["c2"]);
   });
 
@@ -109,7 +102,7 @@ describe("buildPerception", () => {
       makeState("c1"),
       makeState("c2", { emotionValence: 1, emotionArousal: 3 }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.charactersHere[0].emotionLabel).toBeUndefined();
   });
 
@@ -119,7 +112,7 @@ describe("buildPerception", () => {
       makeState("c1"),
       makeState("c2", { emotionValence: 2, emotionArousal: 1 }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.charactersHere[0].emotionLabel).toBe("安宁");
   });
 
@@ -129,7 +122,7 @@ describe("buildPerception", () => {
       makeState("c1"),
       makeState("c2", { emotionValence: 1, emotionArousal: 7 }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.charactersHere[0].emotionLabel).toBe("紧张");
   });
 
@@ -167,7 +160,7 @@ describe("buildPerception", () => {
       ],
     });
     const cm = makeCharacterManager([makeState("c1")]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.objectsHere).toHaveLength(1);
     expect(p.objectsHere[0].name).toBe("茶壶");
     expect(p.objectsHere[0].availableInteractions).toEqual(["倒茶", "闻香"]);
@@ -180,7 +173,7 @@ describe("buildPerception", () => {
       makeState("c2", { location: "main_area" }),
       makeState("c3", { location: "其他地点" }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     // 既有行为：state.location === "main_area" 时走 getAllStates()，
     // 不按各角色实际 location 过滤。这里锁住现状，不做行为改动。
     expect(p.charactersHere.map((c) => c.id)).toEqual(["c2", "c3"]);
@@ -193,14 +186,16 @@ describe("buildPerception", () => {
       makeState("c2", { location: "巷口" }),
       makeState("c3", { location: "main_area" }),
     ]);
-    const p = buildPerception("c1", wm, cm, gameTime);
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
     expect(p.charactersHere.map((c) => c.id)).toEqual(["c2"]);
   });
 
   it("感知包含天气描述", () => {
     const wm = makeWorldManager();
     const cm = makeCharacterManager([makeState("c1")]);
-    const p = buildPerception("c1", wm, cm, gameTime);
-    expect(p.weather).toBe("晴");
+    const p = buildPerception("c1", wm, cm, gameTime, emptyEventStore, clearWeather);
+    // 以前这里是 mock 出来的固定字符串，现在跑的是真实实现 ——
+    // 断言「描述里含天气」这个意图，不绑死具体措辞。
+    expect(p.weather).toContain("晴");
   });
 });

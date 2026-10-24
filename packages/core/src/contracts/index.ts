@@ -66,5 +66,14 @@ export type {
 } from "./storage.js";
 
 export type { WorldConfigSource } from "./world-config.js";
+export type { PromptTemplateSource } from "./prompt-templates.js";
+export type { CostTracker } from "./cost-tracker.js";
+
+export type {
+  EventStorage,
+  ContentStorage,
+  EventQueryFilter,
+  CandidateFilter,
+} from "./events.js";
 
 export type { LLMClient } from "./llm-client.js";

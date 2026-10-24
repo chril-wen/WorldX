@@ -15,6 +15,7 @@ import type {
   ObjectRuntimeState,
   WorldGlobalEntry,
 } from "./index.js";
+import type { ContentStorage, EventStorage } from "./events.js";
 
 export interface MemoryQueryOptions {
   limit?: number;
@@ -38,6 +39,8 @@ export interface MemoryStorage {
     charId: string,
     options?: MemoryQueryOptions,
   ): MemoryEntry[];
+  /** 取单条记忆；不存在时抛错。 */
+  getMemory(id: string): MemoryEntry;
   updateMemory(id: string, patch: Partial<MemoryEntry>): void;
   deleteMemory(id: string): void;
 }
@@ -125,4 +128,6 @@ export interface Storage {
   diaries: DiaryStorage;
   worldState: WorldStateStorage;
   snapshots: SnapshotStorage;
+  events: EventStorage;
+  content: ContentStorage;
 }

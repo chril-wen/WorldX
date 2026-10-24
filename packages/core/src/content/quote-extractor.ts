@@ -1,7 +1,7 @@
-import type { SimulationEvent, ContentCandidate } from "../types/index.js";
-import type { CharacterManager } from "../core/character-manager.js";
+import type { SimulationEvent, ContentCandidate } from "../contracts/index.js";
+import type { CharacterManager } from "../engine/character-manager.js";
 import { generateId } from "../utils/id-generator.js";
-import * as contentStore from "../store/content-store.js";
+import type { ContentStorage } from "../contracts/events.js";
 
 const EMOTION_KEYWORDS = [
   "害怕", "相信", "喜欢", "讨厌", "孤独", "感动", "心痛",
@@ -21,6 +21,7 @@ const QUOTE_THRESHOLD = 4;
 export function extractQuotes(
   dialogueEvent: SimulationEvent,
   characterManager: CharacterManager,
+  contentStore: ContentStorage,
 ): ContentCandidate[] {
   if (dialogueEvent.type !== "dialogue") return [];
   if (dialogueEvent.data?.phase === "turn") return [];

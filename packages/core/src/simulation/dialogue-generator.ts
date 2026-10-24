@@ -4,15 +4,15 @@ import {
   DialogueFinalizeSchema,
   DialogueTurnSchema,
 } from "../llm/output-schemas.js";
-import type { CharacterManager } from "../core/character-manager.js";
-import type { WorldManager } from "../core/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
+import type { WorldManager } from "../engine/world-manager.js";
 import type {
   DialogueResult,
   DialogueSession,
   DialogueTurnGeneration,
   GameTime,
-} from "../types/index.js";
-import { relativeTimeLabel } from "../utils/time-helpers.js";
+} from "../contracts/index.js";
+import { relativeTimeLabel } from "../engine/time-helpers.js";
 
 export class DialogueGenerator {
   constructor(

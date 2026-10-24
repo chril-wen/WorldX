@@ -8,7 +8,9 @@
 
 import type {
   CharacterStateStorage,
+  ContentStorage,
   DiaryStorage,
+  EventStorage,
   MemoryStorage,
   SnapshotStorage,
   Storage,
@@ -19,6 +21,8 @@ import * as memoryStore from "../store/memory-store.js";
 import * as diaryStore from "../store/diary-store.js";
 import * as worldStateStore from "../store/world-state-store.js";
 import * as snapshotStore from "../store/snapshot-store.js";
+import * as eventStore from "../store/event-store.js";
+import * as contentStore from "../store/content-store.js";
 
 export const sqliteMemoryStorage: MemoryStorage = {
   insertMemory: (memory) => memoryStore.insertMemory(memory),
@@ -26,6 +30,7 @@ export const sqliteMemoryStorage: MemoryStorage = {
     memoryStore.hasMemory(characterId, type, content, gameDay, gameTick),
   getMemoriesByCharacter: (charId, options) =>
     memoryStore.getMemoriesByCharacter(charId, options),
+  getMemory: (id) => memoryStore.getMemory(id),
   updateMemory: (id, patch) => memoryStore.updateMemory(id, patch),
   deleteMemory: (id) => memoryStore.deleteMemory(id),
 };
@@ -71,6 +76,23 @@ export const sqliteSnapshotStorage: SnapshotStorage = {
   listSnapshots: () => snapshotStore.listSnapshots(),
 };
 
+export const sqliteEventStorage: EventStorage = {
+  appendEvent: (event) => eventStore.appendEvent(event),
+  appendEvents: (events) => eventStore.appendEvents(events),
+  queryEvents: (filter) => eventStore.queryEvents(filter),
+  getEventsByTimeRange: (from, to) => eventStore.getEventsByTimeRange(from, to),
+  getEventsByIds: (ids) => eventStore.getEventsByIds(ids),
+  getLatestEvents: (count) => eventStore.getLatestEvents(count),
+  countEvents: (filter) => eventStore.countEvents(filter),
+};
+
+export const sqliteContentStorage: ContentStorage = {
+  insertCandidate: (candidate) => contentStore.insertCandidate(candidate),
+  getCandidates: (filter) => contentStore.getCandidates(filter),
+  markReviewed: (id) => contentStore.markReviewed(id),
+  deleteCandidate: (id) => contentStore.deleteCandidate(id),
+};
+
 /** server 用的默认存储实现（SQLite）。 */
 export function createDefaultStorage(): Storage {
   return {
@@ -79,5 +101,7 @@ export function createDefaultStorage(): Storage {
     diaries: sqliteDiaryStorage,
     worldState: sqliteWorldStateStorage,
     snapshots: sqliteSnapshotStorage,
+    events: sqliteEventStorage,
+    content: sqliteContentStorage,
   };
 }

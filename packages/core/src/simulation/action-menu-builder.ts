@@ -1,7 +1,7 @@
-import type { Perception } from "../types/index.js";
-import type { WorldManager } from "../core/world-manager.js";
-import type { CharacterManager } from "../core/character-manager.js";
-import * as eventStore from "../store/event-store.js";
+import type { Perception } from "../contracts/index.js";
+import type { WorldManager } from "../engine/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
+import type { EventStorage } from "../contracts/events.js";
 
 const INTERACTION_COOLDOWN_TICKS = 4;
 
@@ -10,12 +10,13 @@ export function buildActionMenu(
   perception: Perception,
   worldManager: WorldManager,
   characterManager: CharacterManager,
+  eventStore: EventStorage,
 ): string {
   const state = characterManager.getState(charId);
   const profile = characterManager.getProfile(charId);
   const gameTime = worldManager.getCurrentTime();
 
-  const recentInteractionIds = getRecentInteractionIds(charId, gameTime);
+  const recentInteractionIds = getRecentInteractionIds(charId, gameTime, eventStore);
   const isAnchored = !!profile.anchor;
   const canInitiateDialogue = canInitiateDialogueHere(profile.anchor, state.location);
 
@@ -207,6 +208,7 @@ export function buildActionMenu(
 function getRecentInteractionIds(
   charId: string,
   gameTime: { day: number; tick: number },
+  eventStore: EventStorage,
 ): Set<string> {
   const fromTick = Math.max(0, gameTime.tick - INTERACTION_COOLDOWN_TICKS);
   const events = eventStore.queryEvents({

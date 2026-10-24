@@ -1,8 +1,7 @@
-import type { ContentCandidate } from "../types/index.js";
+import type { ContentCandidate } from "../contracts/index.js";
 import type { LLMClient } from "../llm/llm-client.js";
 import { generateId } from "../utils/id-generator.js";
-import * as eventStore from "../store/event-store.js";
-import * as contentStore from "../store/content-store.js";
+import type { ContentStorage, EventStorage } from "../contracts/events.js";
 import { z } from "zod";
 
 const DailySummarySchema = z.object({
@@ -20,6 +19,8 @@ const CharacterWeeklySchema = z.object({
 export async function generateDailySummary(
   gameDay: number,
   llmClient: LLMClient,
+  eventStore: EventStorage,
+  contentStore: ContentStorage,
 ): Promise<ContentCandidate> {
   const highlightEvents = eventStore
     .queryEvents({
@@ -88,6 +89,8 @@ export async function generateCharacterWeekly(
   fromDay: number,
   toDay: number,
   llmClient: LLMClient,
+  eventStore: EventStorage,
+  contentStore: ContentStorage,
 ): Promise<ContentCandidate> {
   const events = eventStore
     .queryEvents({

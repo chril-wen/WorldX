@@ -3,12 +3,16 @@ import { WorldManager } from "../core/world-manager.js";
 import { CharacterManager } from "../core/character-manager.js";
 import { LLMClient } from "../llm/llm-client.js";
 import { PromptBuilder } from "../llm/prompt-builder.js";
-import { SimulationEngine } from "../simulation/simulation-engine.js";
-import { DecisionMaker } from "../simulation/decision-maker.js";
-import { DialogueGenerator } from "../simulation/dialogue-generator.js";
+import {
+  SimulationEngine,
+  DecisionMaker,
+  DialogueGenerator,
+} from "@worldx/core";
 import { initDatabase, closeDb } from "../store/db.js";
 import { createDefaultStorage } from "../store/storage-adapter.js";
 import { filesystemConfigSource } from "../store/config-source.js";
+import { filesystemTemplateSource } from "../store/template-source.js";
+import { sqliteCostTracker } from "../llm/cost-tracker.js";
 import { reloadConfigs } from "../utils/config-loader.js";
 import { TimelineManager } from "./timeline-manager.js";
 import type { SceneConfig } from "../types/index.js";
@@ -146,10 +150,10 @@ export class AppContext {
 
   private buildMinimalRuntime(): void {
     if (!this.llmClient) {
-      this.llmClient = new LLMClient();
+      this.llmClient = new LLMClient(undefined, sqliteCostTracker);
     }
     if (!this.promptBuilder) {
-      this.promptBuilder = new PromptBuilder();
+      this.promptBuilder = new PromptBuilder(filesystemTemplateSource);
       this.promptBuilder.initialize();
     }
   }
@@ -170,13 +174,13 @@ export class AppContext {
     this.characterManager.initialize();
 
     if (!this.llmClient) {
-      this.llmClient = new LLMClient();
+      this.llmClient = new LLMClient(undefined, sqliteCostTracker);
     }
 
     this.characterManager.memoryManager.setLLMClient(this.llmClient);
 
     if (!this.promptBuilder) {
-      this.promptBuilder = new PromptBuilder();
+      this.promptBuilder = new PromptBuilder(filesystemTemplateSource);
       this.promptBuilder.initialize();
     }
     this.promptBuilder.setContentLanguage(this.worldManager.getContentLanguage());
@@ -200,6 +204,7 @@ export class AppContext {
       this.characterManager,
       this.llmClient,
       this.promptBuilder,
+      createDefaultStorage(),
     );
   }
 }

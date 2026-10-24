@@ -7,15 +7,15 @@ import type {
   Perception,
   SimulationEvent,
   GameTime,
-} from "../types/index.js";
-import type { WorldManager } from "../core/world-manager.js";
-import type { CharacterManager } from "../core/character-manager.js";
+} from "../contracts/index.js";
+import type { WorldManager } from "../engine/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
 import type { LLMClient } from "../llm/llm-client.js";
 import type { PromptBuilder } from "../llm/prompt-builder.js";
 import { DecisionMaker } from "./decision-maker.js";
 import { DialogueGenerator } from "./dialogue-generator.js";
 import { buildPerception } from "./perceiver.js";
-import { advanceWeather } from "../core/weather-manager.js";
+import { WeatherManager } from "../engine/weather-manager.js";
 import { buildActionMenu } from "./action-menu-builder.js";
 import { executeAction, completeAction } from "./action-executor.js";
 import {
@@ -24,17 +24,16 @@ import {
   MicroReflectionSchema,
   ReflectionSchema,
 } from "../llm/output-schemas.js";
-import * as memoryStore from "../store/memory-store.js";
 import {
   absoluteTick,
   getBatchTicksForOneCycle,
   tickToSceneTimeWithPeriod,
-} from "../utils/time-helpers.js";
+} from "../engine/time-helpers.js";
 import { generateId } from "../utils/id-generator.js";
-import * as eventStore from "../store/event-store.js";
 import { calculateDramScore, flagHighDramaEvents } from "../content/drama-scorer.js";
 import { extractQuotes } from "../content/quote-extractor.js";
 import { generateDailySummary } from "../content/summary-generator.js";
+import type { Storage } from "../contracts/storage.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -56,13 +55,18 @@ export class SimulationEngine {
   private decisionMaker: DecisionMaker;
   private dialogueGenerator: DialogueGenerator;
   private memoryEvalQueue: Promise<void> = Promise.resolve();
+  private storage: Storage;
+  private weatherManager: WeatherManager;
 
   constructor(
     private worldManager: WorldManager,
     private characterManager: CharacterManager,
     private llmClient: LLMClient,
     private promptBuilder: PromptBuilder,
+    storage: Storage,
   ) {
+    this.storage = storage;
+    this.weatherManager = new WeatherManager(storage.worldState);
     this.decisionMaker = new DecisionMaker(
       llmClient,
       promptBuilder,
@@ -88,7 +92,7 @@ export class SimulationEngine {
       return this.finalizeTickEvents(events);
     }
 
-    const weatherEvent = advanceWeather(
+    const weatherEvent = this.weatherManager.advanceWeather(
       gameTime,
       this.worldManager.getSceneConfig().tickDurationMinutes,
     );
@@ -226,12 +230,12 @@ export class SimulationEngine {
     for (const event of events) {
       event.dramScore = calculateDramScore(event, this.characterManager);
     }
-    flagHighDramaEvents(events);
+    flagHighDramaEvents(events, this.storage.content);
     for (const event of events.filter((e) => e.type === "dialogue")) {
-      extractQuotes(event, this.characterManager);
+      extractQuotes(event, this.characterManager, this.storage.content);
     }
     if (events.length > 0) {
-      eventStore.appendEvents(events);
+      this.storage.events.appendEvents(events);
     }
     return events;
   }
@@ -266,7 +270,7 @@ export class SimulationEngine {
   }
 
   private scheduleDailySummary(day: number): void {
-    void generateDailySummary(day, this.llmClient).catch((err) => {
+    void generateDailySummary(day, this.llmClient, this.storage.events, this.storage.content).catch((err) => {
       console.error("[SimEngine] Daily summary error:", err);
     });
   }
@@ -520,6 +524,8 @@ export class SimulationEngine {
           this.worldManager,
           this.characterManager,
           gameTime,
+          this.storage.events,
+          this.weatherManager.getWeatherState(),
         );
 
         this.maybeGenerateObservationMemory(charId, perception, gameTime, events);
@@ -529,6 +535,7 @@ export class SimulationEngine {
           perception,
           this.worldManager,
           this.characterManager,
+          this.storage.events,
         );
         const rawDecision = await this.decisionMaker.makeDecision(
           charId,
@@ -1043,7 +1050,7 @@ export class SimulationEngine {
 
       for (const evaluation of result.data.evaluations) {
         try {
-          memoryStore.updateMemory(evaluation.memoryId, {
+          this.storage.memories.updateMemory(evaluation.memoryId, {
             importance: evaluation.importance,
             emotionalValence: evaluation.emotionalValence,
             emotionalIntensity: evaluation.emotionalIntensity,
@@ -1119,8 +1126,8 @@ export class SimulationEngine {
 
           for (const refId of insight.relatedMemoryIds) {
             try {
-              const refMem = memoryStore.getMemory(refId);
-              memoryStore.updateMemory(refId, {
+              const refMem = this.storage.memories.getMemory(refId);
+              this.storage.memories.updateMemory(refId, {
                 decayFactor: refMem.decayFactor * 0.3,
               });
             } catch {

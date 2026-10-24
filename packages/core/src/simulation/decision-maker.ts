@@ -1,14 +1,14 @@
 import type { LLMClient } from "../llm/llm-client.js";
 import type { PromptBuilder } from "../llm/prompt-builder.js";
 import { ActionDecisionSchema } from "../llm/output-schemas.js";
-import type { CharacterManager } from "../core/character-manager.js";
-import type { WorldManager } from "../core/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
+import type { WorldManager } from "../engine/world-manager.js";
 import type {
   ActionDecision,
   GameTime,
   Perception,
-} from "../types/index.js";
-import { relativeTimeLabel } from "../utils/time-helpers.js";
+} from "../contracts/index.js";
+import { relativeTimeLabel } from "../engine/time-helpers.js";
 
 export class DecisionMaker {
   constructor(

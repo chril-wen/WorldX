@@ -6,7 +6,6 @@
  */
 
 export * from "./contracts/index.js";
-export type { LLMClient } from "./contracts/llm-client.js";
 
 export { updateEmotion, decayEmotion, getEmotionLabel } from "./engine/emotion-manager.js";
 export { decayNeeds } from "./engine/needs-manager.js";
@@ -14,6 +13,22 @@ export { MemoryManager } from "./engine/memory-manager.js";
 export { WorldManager } from "./engine/world-manager.js";
 export type { TickAdvanceResult, MainAreaZone } from "./engine/world-manager.js";
 export { CharacterManager } from "./engine/character-manager.js";
+
+export { PromptBuilder } from "./llm/prompt-builder.js";
+export { LLMClient } from "./llm/llm-client.js";
+export * from "./llm/output-schemas.js";
+export * from "./llm/structured-output.js";
+
+export { SimulationEngine } from "./simulation/simulation-engine.js";
+export { DecisionMaker } from "./simulation/decision-maker.js";
+export { DialogueGenerator } from "./simulation/dialogue-generator.js";
+export { buildPerception } from "./simulation/perceiver.js";
+export { buildActionMenu } from "./simulation/action-menu-builder.js";
+export { executeAction, completeAction } from "./simulation/action-executor.js";
+
+export { calculateDramScore, flagHighDramaEvents } from "./content/drama-scorer.js";
+export { extractQuotes } from "./content/quote-extractor.js";
+export { generateDailySummary, generateCharacterWeekly } from "./content/summary-generator.js";
 export { generateId } from "./utils/id-generator.js";
 export * from "./engine/time-helpers.js";
 export {

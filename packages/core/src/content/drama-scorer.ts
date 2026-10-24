@@ -1,7 +1,7 @@
-import type { SimulationEvent, ContentCandidate } from "../types/index.js";
-import type { CharacterManager } from "../core/character-manager.js";
+import type { SimulationEvent, ContentCandidate } from "../contracts/index.js";
+import type { CharacterManager } from "../engine/character-manager.js";
 import { generateId } from "../utils/id-generator.js";
-import * as contentStore from "../store/content-store.js";
+import type { ContentStorage } from "../contracts/events.js";
 
 const TAG_SCORES: Record<string, number> = {
   confession: 3,
@@ -63,6 +63,7 @@ export function calculateDramScore(
 
 export function flagHighDramaEvents(
   events: SimulationEvent[],
+  contentStore: ContentStorage,
   threshold: number = 6.0,
 ): void {
   for (const event of events) {

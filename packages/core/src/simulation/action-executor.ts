@@ -2,12 +2,12 @@ import type {
   ActionDecision,
   SimulationEvent,
   GameTime,
-} from "../types/index.js";
-import type { WorldManager, MainAreaZone } from "../core/world-manager.js";
-import type { CharacterManager } from "../core/character-manager.js";
+} from "../contracts/index.js";
+import type { WorldManager, MainAreaZone } from "../engine/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
 import { generateId } from "../utils/id-generator.js";
-import { absoluteTick } from "../utils/time-helpers.js";
-import { updateEmotion } from "../core/emotion-manager.js";
+import { absoluteTick } from "../engine/time-helpers.js";
+import { updateEmotion } from "../engine/emotion-manager.js";
 
 const WORLD_ACTION_TARGET_PREFIX = "world_action:";
 

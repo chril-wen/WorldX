@@ -64,6 +64,12 @@ export class InMemoryMemoryStorage implements MemoryStorage {
     return results.map((m) => ({ ...m }));
   }
 
+  getMemory(id: string): MemoryEntry {
+    const row = this.rows.find((m) => m.id === id);
+    if (!row) throw new Error(`Memory not found: ${id}`);
+    return { ...row };
+  }
+
   updateMemory(id: string, patch: Partial<MemoryEntry>): void {
     const row = this.rows.find((m) => m.id === id);
     if (!row) return;

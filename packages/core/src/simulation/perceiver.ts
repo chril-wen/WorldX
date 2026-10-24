@@ -1,19 +1,21 @@
-import type { Perception, GameTime } from "../types/index.js";
-import type { WorldManager } from "../core/world-manager.js";
-import type { CharacterManager } from "../core/character-manager.js";
-import { getEmotionLabel } from "../core/emotion-manager.js";
+import type { Perception, GameTime } from "../contracts/index.js";
+import type { WorldManager } from "../engine/world-manager.js";
+import type { CharacterManager } from "../engine/character-manager.js";
+import { getEmotionLabel } from "../engine/emotion-manager.js";
 import {
   describeWeatherFor,
-  getWeatherState,
   resolveExposure,
-} from "../core/weather-manager.js";
-import * as eventStore from "../store/event-store.js";
+} from "../engine/weather-manager.js";
+import type { WeatherState } from "../engine/weather-manager.js";
+import type { EventStorage } from "../contracts/events.js";
 
 export function buildPerception(
   charId: string,
   worldManager: WorldManager,
   characterManager: CharacterManager,
   gameTime: GameTime,
+  eventStore: EventStorage,
+  weatherState: WeatherState,
 ): Perception {
   const state = characterManager.getState(charId);
   const location = worldManager.getLocation(state.location);
@@ -98,10 +100,10 @@ export function buildPerception(
   const localChanges = recentEvents.map(describeEventData);
   const recentEnvironmentChanges = [...globalChanges, ...localChanges];
 
-  const recentActions = getRecentActionDescriptions(charId, gameTime);
+  const recentActions = getRecentActionDescriptions(charId, gameTime, eventStore);
 
   const weather = describeWeatherFor(
-    getWeatherState(),
+    weatherState,
     resolveExposure(undefined, location),
     gameTime,
     worldManager.getSceneConfig().tickDurationMinutes,
@@ -127,6 +129,7 @@ export function buildPerception(
 function getRecentActionDescriptions(
   charId: string,
   gameTime: GameTime,
+  eventStore: EventStorage,
 ): string[] {
   const lookbackTicks = 6;
   const fromTick = Math.max(0, gameTime.tick - lookbackTicks);
