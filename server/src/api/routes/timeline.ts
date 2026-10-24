@@ -7,6 +7,16 @@ import {
   isSimulationBusy,
 } from "../../services/simulation-activity.js";
 import { findWorldById } from "../../utils/world-directories.js";
+import {
+  createTimelineSnapshot,
+  deleteTimelineSnapshot,
+  listTimelineSnapshots,
+  restoreTimelineSnapshot,
+} from "../../store/snapshot-store.js";
+import {
+  compareTimelineStates,
+  readForkedFrom,
+} from "../../services/timeline-comparator.js";
 
 const router = Router();
 
@@ -170,6 +180,223 @@ router.delete("/world/:worldId/:timelineId", (req, res) => {
   try {
     appContext.timelineManager.deleteTimeline(world.dir, timelineId);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ─── 快照 ──────────────────────────────────────────────────────────────────
+
+function timelineTarget(worldDir: string, timelineId: string) {
+  return {
+    dir: appContext.timelineManager.getTimelineDir(worldDir, timelineId),
+    dbPath: appContext.timelineManager.getTimelineDbPath(worldDir, timelineId),
+  };
+}
+
+// GET /timelines/:id/snapshots — 列出某条时间线的快照
+router.get("/:id/snapshots", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+
+  try {
+    const snapshots = listTimelineSnapshots(
+      timelineTarget(worldDir, req.params.id),
+    );
+    res.json({ snapshots });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /timelines/:id/snapshot — 手动打快照（当前只有日末自动触发）
+router.post("/:id/snapshot", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+
+  const timelineId = req.params.id;
+  const isCurrent = timelineId === appContext.timelineManager.getCurrentTimelineId();
+  if (!isCurrent) {
+    // 给别的（没在跑的）时间线打快照 —— 读它的库，不碰当前连接
+    try {
+      const meta = appContext.timelineManager
+        .listTimelines(worldDir)
+        .find((t) => t.id === timelineId);
+      if (!meta) {
+        res.status(404).json({ error: "Timeline not found" });
+        return;
+      }
+      const description = typeof req.body?.description === "string"
+        ? req.body.description
+        : `手动快照 day ${meta.lastGameTime.day} tick ${meta.lastGameTime.tick}`;
+      const id = createTimelineSnapshot(
+        timelineTarget(worldDir, timelineId),
+        meta.lastGameTime,
+        description,
+      );
+      res.json({ ok: true, snapshotId: id });
+      return;
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+      return;
+    }
+  }
+
+  // 当前时间线：必须等模拟停下来，否则复制出来的状态是半截的
+  if (rejectIfSimulationBusy(res)) return;
+
+  try {
+    const gameTime = appContext.worldManager.getCurrentTime();
+    const description = typeof req.body?.description === "string"
+      ? req.body.description
+      : `手动快照 day ${gameTime.day} tick ${gameTime.tick}`;
+    const id = createTimelineSnapshot(
+      timelineTarget(worldDir, timelineId),
+      gameTime,
+      description,
+    );
+    res.json({ ok: true, snapshotId: id });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// DELETE /timelines/:id/snapshots/:snapshotId — 删除快照
+router.delete("/:id/snapshots/:snapshotId", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+
+  try {
+    const ok = deleteTimelineSnapshot(
+      timelineTarget(worldDir, req.params.id),
+      req.params.snapshotId,
+    );
+    if (!ok) {
+      res.status(404).json({ error: "Snapshot not found" });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /timelines/:id/snapshots/:snapshotId/restore — 恢复到某个快照
+router.post("/:id/snapshots/:snapshotId/restore", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+  if (rejectIfSimulationBusy(res)) return;
+
+  const timelineId = req.params.id;
+  const isCurrent = timelineId === appContext.timelineManager.getCurrentTimelineId();
+
+  try {
+    restoreTimelineSnapshot(
+      timelineTarget(worldDir, timelineId),
+      req.params.snapshotId,
+    );
+
+    // 当前时间线恢复了状态 —— 必须重载运行时，否则内存里的角色状态
+    // 和磁盘上的库对不上。
+    if (isCurrent) {
+      appContext.switchTimeline(timelineId);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ─── 分叉 ──────────────────────────────────────────────────────────────────
+
+// POST /timelines/:id/fork — 从某个快照分叉出新时间线
+router.post("/:id/fork", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+  if (rejectIfSimulationBusy(res)) return;
+
+  const sourceId = req.params.id;
+  const snapshotId = req.body?.snapshotId;
+  const label = typeof req.body?.label === "string" ? req.body.label : undefined;
+
+  if (!snapshotId || typeof snapshotId !== "string") {
+    res.status(400).json({ error: "snapshotId is required" });
+    return;
+  }
+
+  try {
+    const newId = appContext.timelineManager.forkFromSnapshot(
+      worldDir,
+      sourceId,
+      snapshotId,
+      label,
+    );
+    res.json({ ok: true, timelineId: newId });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ─── 对比 ──────────────────────────────────────────────────────────────────
+
+// GET /timelines/compare?a=tl-x&b=tl-y — 并排输出两条时间线的差异
+router.get("/compare", (req, res) => {
+  const worldDir = appContext.getWorldDir();
+  if (!worldDir) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+
+  const a = typeof req.query.a === "string" ? req.query.a : "";
+  const b = typeof req.query.b === "string" ? req.query.b : "";
+  if (!a || !b) {
+    res.status(400).json({ error: "Both a and b are required" });
+    return;
+  }
+
+  const timelines = appContext.timelineManager.listTimelines(worldDir);
+  const metaA = timelines.find((t) => t.id === a);
+  const metaB = timelines.find((t) => t.id === b);
+  if (!metaA || !metaB) {
+    res.status(404).json({ error: "Timeline not found" });
+    return;
+  }
+
+  try {
+    const comparison = compareTimelineStates(
+      appContext.timelineManager.getTimelineDbPath(worldDir, a),
+      appContext.timelineManager.getTimelineDbPath(worldDir, b),
+      {
+        id: metaA.id,
+        label: metaA.label,
+        lastGameTime: metaA.lastGameTime,
+        tickCount: metaA.tickCount,
+      },
+      {
+        id: metaB.id,
+        label: metaB.label,
+        lastGameTime: metaB.lastGameTime,
+        tickCount: metaB.tickCount,
+      },
+      readForkedFrom(appContext.timelineManager.getTimelineDir(worldDir, b)),
+    );
+    res.json(comparison);
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

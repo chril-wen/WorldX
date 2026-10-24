@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../services/api-client";
 import type { TimelineWithWorld, TimelineMeta } from "../../types/api";
+import { TimelineStatePanel } from "./TimelineStatePanel";
 
 export function TimelineManagerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
@@ -11,6 +12,8 @@ export function TimelineManagerModal({ onClose }: { onClose: () => void }) {
   const [expandedWorldId, setExpandedWorldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // 「状态」面板（快照/分叉/对比）——点某条时间线的按钮打开
+  const [statePanelTimelineId, setStatePanelTimelineId] = useState<string | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -82,6 +85,11 @@ export function TimelineManagerModal({ onClose }: { onClose: () => void }) {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleCloseStatePanel = () => {
+    setStatePanelTimelineId(null);
+    loadData();
   };
 
   const formatDate = (iso: string) => {
@@ -180,6 +188,12 @@ export function TimelineManagerModal({ onClose }: { onClose: () => void }) {
                                   </span>
                                 </div>
                               </div>
+                              <button
+                                onClick={() => setStatePanelTimelineId(tl.id)}
+                                style={stateBtnStyle}
+                              >
+                                {t("manager.state")}
+                              </button>
                               {isActiveTl ? (
                                 <span style={activeBadgeStyle}>{t("manager.active")}</span>
                               ) : (
@@ -203,6 +217,14 @@ export function TimelineManagerModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
+
+      {statePanelTimelineId && (
+        <TimelineStatePanel
+          timelineId={statePanelTimelineId}
+          onClose={handleCloseStatePanel}
+          onChanged={loadData}
+        />
+      )}
     </div>
   );
 }
@@ -332,3 +354,13 @@ function deleteBtnStyle(busy: boolean): CSSProperties {
     flexShrink: 0,
   };
 }
+
+const stateBtnStyle: CSSProperties = {
+  background: "rgba(120,160,255,0.16)",
+  border: "1px solid rgba(120,160,255,0.4)",
+  color: "#cdd8ff",
+  padding: "2px 9px",
+  borderRadius: 6,
+  fontSize: 11,
+  cursor: "pointer",
+};

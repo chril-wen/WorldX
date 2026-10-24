@@ -15,6 +15,7 @@
     "demo:region-overlay": "node generators/map/src/demo-region-overlay.mjs",
     "generate:map": "node generators/map/src/index.mjs",
     "generate:character": "node generators/character/src/index.mjs",
+    "timeline": "tsx scripts/timeline.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

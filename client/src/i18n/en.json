@@ -339,7 +339,8 @@
     "timelineCount": "{{count}} timeline",
     "timelineCount_plural": "{{count}} timelines",
     "dayTicks": "Day {{day}} · {{ticks}} ticks",
-    "sampleWorld": "Sample"
+    "sampleWorld": "Sample",
+    "state": "State"
   },
   "timeline": {
     "title": "Event Timeline",

@@ -339,7 +339,8 @@
     "timelineCount": "{{count}} 条时间线",
     "timelineCount_plural": "{{count}} 条时间线",
     "dayTicks": "第 {{day}} 天 · {{ticks}} 步",
-    "sampleWorld": "示例"
+    "sampleWorld": "示例",
+    "state": "状态"
   },
   "timeline": {
     "title": "事件时间线",

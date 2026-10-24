@@ -158,6 +158,58 @@ export interface TimelineMeta {
   lastGameTime: GameTime;
   tickCount: number;
   status: "recording" | "stopped";
+  /** 分叉来源 —— 这条时间线是从哪条时间线的哪个快照分出来的 */
+  forkedFrom?: {
+    timelineId: string;
+    snapshotId: string;
+    tick: number;
+    day: number;
+  };
+  /** 人类可读的标签 */
+  label?: string;
+}
+
+export interface SnapshotMeta {
+  id: string;
+  gameDay: number;
+  gameTick: number;
+  description: string;
+  filePath: string;
+  createdAt: string;
+}
+
+export interface TimelineComparison {
+  timelineA: {
+    id: string;
+    label?: string;
+    lastGameTime: GameTime;
+    tickCount: number;
+  };
+  timelineB: {
+    id: string;
+    label?: string;
+    lastGameTime: GameTime;
+    tickCount: number;
+  };
+  characters: {
+    characterId: string;
+    onlyIn: "a" | "b" | null;
+    fields: { field: string; a: unknown; b: unknown }[];
+  }[];
+  memories: {
+    characterId: string;
+    onlyInA: number;
+    onlyInB: number;
+    common: number;
+    diverged: number;
+  }[];
+  eventCounts: { a: number; b: number };
+  forkedFrom?: {
+    timelineId: string;
+    snapshotId: string;
+    day: number;
+    tick: number;
+  };
 }
 
 export interface TimelineWithWorld {

@@ -13,6 +13,8 @@ import type {
   TimelineMeta,
   TimelineWithWorld,
   TimelineFrame,
+  SnapshotMeta,
+  TimelineComparison,
 } from "../../types/api";
 
 const API_BASE = "/api";
@@ -526,6 +528,57 @@ export const apiClient = {
     currentTimelineId: string | null;
   }> {
     return fetchJSON("/timelines/all");
+  },
+
+  getTimelineSnapshots(timelineId: string): Promise<{ snapshots: SnapshotMeta[] }> {
+    return fetchJSON(`/timelines/${encodeURIComponent(timelineId)}/snapshots`);
+  },
+
+  createTimelineSnapshot(
+    timelineId: string,
+    description?: string,
+  ): Promise<{ ok: boolean; snapshotId: string }> {
+    return postJSON(`/timelines/${encodeURIComponent(timelineId)}/snapshot`, {
+      description,
+    });
+  },
+
+  deleteTimelineSnapshot(
+    timelineId: string,
+    snapshotId: string,
+  ): Promise<{ ok: boolean }> {
+    return deleteJSON(
+      `/timelines/${encodeURIComponent(timelineId)}/snapshots/${encodeURIComponent(snapshotId)}`,
+    );
+  },
+
+  restoreTimelineSnapshot(
+    timelineId: string,
+    snapshotId: string,
+  ): Promise<{ ok: boolean }> {
+    return postJSON(
+      `/timelines/${encodeURIComponent(timelineId)}/snapshots/${encodeURIComponent(snapshotId)}/restore`,
+    );
+  },
+
+  forkTimeline(
+    timelineId: string,
+    snapshotId: string,
+    label?: string,
+  ): Promise<{ ok: boolean; timelineId: string }> {
+    return postJSON(`/timelines/${encodeURIComponent(timelineId)}/fork`, {
+      snapshotId,
+      label,
+    });
+  },
+
+  compareTimelines(
+    timelineA: string,
+    timelineB: string,
+  ): Promise<TimelineComparison> {
+    return fetchJSON(
+      `/timelines/compare?a=${encodeURIComponent(timelineA)}&b=${encodeURIComponent(timelineB)}`,
+    );
   },
 
   deleteTimelineFromWorld(
