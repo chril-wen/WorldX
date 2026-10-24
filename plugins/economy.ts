@@ -65,16 +65,19 @@ function pickTradeableObjects(locations: any[]): Array<{ id: string; name: strin
 /**
  * 库存状态文案 —— 阈值决定显示什么。
  *
- * core 的 `consumeItem` 会拿 `displayStates` 把库存数字翻译成状态文案，
- * 存进 `object_states`。
+ * 格式是 `{状态文案: 阈值}` —— 键是文案，值是触发这个文案的库存下限。
+ * core 的 `setItemStock` 会把键按阈值从高到低排，库存够第一个就显示它。
+ *
+ * 注意键值别搞反了 —— 契约是 `Record<string, number>`，
+ * 写成 `{0: "空了"}` 的话，TypeScript 会直接报错（值该是数字）。
  */
 function buildDisplayStates(): Record<string, number> {
   return {
-    "0": "空了",
-    "1": "快没了",
-    "2": "不多了",
-    "3": "还有",
-    "5": "充足",
+    充足: 5,
+    还有: 3,
+    不多了: 2,
+    快没了: 1,
+    空了: 0,
   };
 }
 

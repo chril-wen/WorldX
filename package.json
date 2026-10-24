@@ -19,10 +19,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "npm run typecheck:core && npm run typecheck:server && npm run typecheck:client",
+    "typecheck": "npm run typecheck:core && npm run typecheck:server && npm run typecheck:client && npm run typecheck:plugins",
     "typecheck:core": "cd packages/core && tsc --noEmit",
     "typecheck:server": "cd server && tsc --noEmit",
     "typecheck:client": "cd client && tsc --noEmit",
+    "typecheck:plugins": "tsc --noEmit -p tsconfig.plugins.json",
     "build": "npm run build:core && npm run build:server",
     "build:core": "cd packages/core && tsc -p tsconfig.json",
     "build:server": "cd server && tsc",
@@ -32,12 +33,12 @@
     "packages/*"
   ],
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^5.0.5",
     "jsdom": "^29.1.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.7.3",
     "vitest": "^5.0.5"
   }
