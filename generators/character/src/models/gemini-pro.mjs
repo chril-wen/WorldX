@@ -5,8 +5,8 @@
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-pro-preview";
-const MODEL = process.env.VISION_MODEL || DEFAULT_MODEL;
-const BASE_URL = process.env.VISION_BASE_URL || DEFAULT_BASE_URL;
+const MODEL = resolveModelName("vision", "VISION_MODEL") || DEFAULT_MODEL;
+const BASE_URL = resolveBaseUrl("vision", "VISION_BASE_URL") || DEFAULT_BASE_URL;
 const REQUEST_TIMEOUT_MS = parseInt(process.env.VISION_TIMEOUT_MS || "180000", 10);
 
 /**

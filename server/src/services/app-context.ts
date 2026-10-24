@@ -13,6 +13,7 @@ import { createDefaultStorage } from "../store/storage-adapter.js";
 import { filesystemConfigSource } from "../store/config-source.js";
 import { filesystemTemplateSource } from "../store/template-source.js";
 import { sqliteCostTracker } from "../llm/cost-tracker.js";
+import { buildLLMConfigFromFiles } from "../llm/model-config.js";
 import { reloadConfigs } from "../utils/config-loader.js";
 import { TimelineManager } from "./timeline-manager.js";
 import type { SceneConfig } from "../types/index.js";
@@ -150,7 +151,7 @@ export class AppContext {
 
   private buildMinimalRuntime(): void {
     if (!this.llmClient) {
-      this.llmClient = new LLMClient(undefined, sqliteCostTracker);
+      this.llmClient = new LLMClient(buildLLMConfigFromFiles(), sqliteCostTracker);
     }
     if (!this.promptBuilder) {
       this.promptBuilder = new PromptBuilder(filesystemTemplateSource);
@@ -174,7 +175,7 @@ export class AppContext {
     this.characterManager.initialize();
 
     if (!this.llmClient) {
-      this.llmClient = new LLMClient(undefined, sqliteCostTracker);
+      this.llmClient = new LLMClient(buildLLMConfigFromFiles(), sqliteCostTracker);
     }
 
     this.characterManager.memoryManager.setLLMClient(this.llmClient);

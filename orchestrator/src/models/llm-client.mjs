@@ -6,6 +6,7 @@
 import dotenv from "dotenv";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { resolveBaseUrl, resolveModelName } from "../../../shared/models-config.mjs";
 import {
   STRUCTURED_OUTPUT_MODES,
   resolveStructuredOutputMode,
@@ -48,9 +49,10 @@ function logError(step, error) {
 }
 
 export async function chat(messages, { temperature = 0.3, logStep = "orchestrator", requestTimeoutMs, responseFormatType, maxTokens } = {}) {
-  const BASE_URL = process.env.ORCHESTRATOR_BASE_URL || DEFAULT_BASE_URL;
+  // 端点与模型名：models.json 优先，.env 覆盖；密钥只在 .env
+  const BASE_URL = resolveBaseUrl("orchestrator", "ORCHESTRATOR_BASE_URL") || DEFAULT_BASE_URL;
   const API_KEY = process.env.ORCHESTRATOR_API_KEY || "";
-  const MODEL = process.env.ORCHESTRATOR_MODEL || DEFAULT_MODEL;
+  const MODEL = resolveModelName("orchestrator", "ORCHESTRATOR_MODEL") || DEFAULT_MODEL;
   const timeoutMs =
     Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0
       ? requestTimeoutMs
@@ -142,8 +144,8 @@ export async function chatJSON(arg, maybeOpts = {}) {
     process.env.ORCHESTRATOR_STRUCTURED_OUTPUT_MODE,
     DEFAULT_STRUCTURED_OUTPUT_MODE,
   );
-  const baseURL = process.env.ORCHESTRATOR_BASE_URL || DEFAULT_BASE_URL;
-  const model = process.env.ORCHESTRATOR_MODEL || DEFAULT_MODEL;
+  const baseURL = resolveBaseUrl("orchestrator", "ORCHESTRATOR_BASE_URL") || DEFAULT_BASE_URL;
+  const model = resolveModelName("orchestrator", "ORCHESTRATOR_MODEL") || DEFAULT_MODEL;
   const capabilityKey = `${baseURL}::${model}`;
 
   for (let attempt = 1; attempt <= retries; attempt++) {

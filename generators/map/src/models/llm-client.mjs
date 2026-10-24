@@ -3,6 +3,7 @@
  * Shares ORCHESTRATOR_* env vars with the orchestrator package.
  */
 
+import { resolveBaseUrl, resolveModelName } from "../../../../shared/models-config.mjs";
 import { logModelCall, logModelResponse, logError } from "../utils/logger.mjs";
 import {
   STRUCTURED_OUTPUT_MODES,
@@ -23,9 +24,10 @@ const DEFAULT_STRUCTURED_OUTPUT_MODE = resolveStructuredOutputMode(
 const structuredOutputCapabilityCache = new Map();
 
 export async function chat(messages, { temperature = 0.3, logStep = "orchestrator", requestTimeoutMs, responseFormatType } = {}) {
-  const BASE_URL = process.env.ORCHESTRATOR_BASE_URL || DEFAULT_BASE_URL;
+  // 端点与模型名：models.json 优先，.env 覆盖；密钥只在 .env
+  const BASE_URL = resolveBaseUrl("orchestrator", "ORCHESTRATOR_BASE_URL") || DEFAULT_BASE_URL;
   const API_KEY = process.env.ORCHESTRATOR_API_KEY || "";
-  const MODEL = process.env.ORCHESTRATOR_MODEL || DEFAULT_MODEL;
+  const MODEL = resolveModelName("orchestrator", "ORCHESTRATOR_MODEL") || DEFAULT_MODEL;
   const timeoutMs =
     Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0
       ? requestTimeoutMs

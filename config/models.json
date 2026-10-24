@@ -1,0 +1,23 @@
+{
+  "orchestrator": {
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+    "model": "doubao-seed-2-1-pro-260915"
+  },
+  "image": {
+    "provider": "openai-images",
+    "baseUrl": "https://kemuapi.top/v1",
+    "model": "gpt-image-2.5-sunburst"
+  },
+  "vision": {
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+    "model": "doubao-seed-2-1-pro-260915"
+  },
+  "simulation": {
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+    "model": "deepseek-v4-1-flash-261017",
+    "pricing": {
+      "inputPer1k": 0.001,
+      "outputPer1k": 0.002
+    }
+  }
+}

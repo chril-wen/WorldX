@@ -3,6 +3,7 @@
  * Reads IMAGE_GEN_* env vars. Default: OpenRouter + gemini-3.1-flash-image-preview.
  */
 
+import { resolveBaseUrl, resolveModelName, resolveImageProvider } from "../../../../shared/models-config.mjs";
 import dotenv from "dotenv";
 import sharp from "sharp";
 import { join, dirname } from "path";
@@ -21,9 +22,9 @@ dotenv.config({ path: join(__dirname, "../../../../.env") });
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
-const MODEL = process.env.IMAGE_GEN_MODEL || DEFAULT_MODEL;
-const BASE_URL = process.env.IMAGE_GEN_BASE_URL || DEFAULT_BASE_URL;
-const PROVIDER = (process.env.IMAGE_GEN_PROVIDER || "").trim().toLowerCase();
+const MODEL = resolveModelName("image", "IMAGE_GEN_MODEL") || DEFAULT_MODEL;
+const BASE_URL = resolveBaseUrl("image", "IMAGE_GEN_BASE_URL") || DEFAULT_BASE_URL;
+const PROVIDER = resolveImageProvider("IMAGE_GEN_PROVIDER").trim().toLowerCase();
 const DEFAULT_REQUEST_TIMEOUT_MS = parseInt(process.env.IMAGE_GEN_TIMEOUT_MS || "180000", 10);
 const MAX_CONSECUTIVE_FAILURES = 2;
 

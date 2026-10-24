@@ -3,6 +3,7 @@
  * Reads IMAGE_GEN_* env vars. Simplified client for character sprite generation.
  */
 
+import { resolveBaseUrl, resolveModelName, resolveImageProvider } from "../../../shared/models-config.mjs";
 import { isArkProvider, arkEditImage } from "../../../shared/ark-seedream.mjs";
 import {
   isOpenAiImagesProvider,
@@ -13,9 +14,9 @@ import sharp from "sharp";
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
-const MODEL = process.env.IMAGE_GEN_MODEL || DEFAULT_MODEL;
-const BASE_URL = process.env.IMAGE_GEN_BASE_URL || DEFAULT_BASE_URL;
-const PROVIDER = (process.env.IMAGE_GEN_PROVIDER || "").trim().toLowerCase();
+const MODEL = resolveModelName("image", "IMAGE_GEN_MODEL") || DEFAULT_MODEL;
+const BASE_URL = resolveBaseUrl("image", "IMAGE_GEN_BASE_URL") || DEFAULT_BASE_URL;
+const PROVIDER = resolveImageProvider("IMAGE_GEN_PROVIDER").trim().toLowerCase();
 const REQUEST_TIMEOUT_MS = parseInt(process.env.IMAGE_GEN_TIMEOUT_MS || "180000", 10);
 
 function useGoogleNativeProvider() {
