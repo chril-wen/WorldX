@@ -1,9 +1,19 @@
 /**
  * Image generation client — OpenAI-compatible chat completions with image output.
  * Reads IMAGE_GEN_* env vars. Simplified client for character sprite generation.
+ *
+ * ⚠️ 这个文件 import 了**两个不同的** shared/ 目录，别把它们搞混：
+ *
+ *   ../../../shared/ark-seedream.mjs   → generators/shared/（绘图 provider 实现）
+ *   ../../../../shared/models-config.mjs → 仓库根 shared/（模型配置读取）
+ *
+ * 根 shared/ 要多一级是因为 generators/character/src/models/ 往上三级是
+ * generators/，往上四级才是仓库根。2026-10-24 这里曾写成三级，
+ * 结果指向 generators/shared/models-config.mjs —— 那个文件不存在，
+ * character generator 直接起不来。
  */
 
-import { resolveBaseUrl, resolveModelName, resolveImageProvider } from "../../../shared/models-config.mjs";
+import { resolveBaseUrl, resolveModelName, resolveImageProvider } from "../../../../shared/models-config.mjs";
 import { isArkProvider, arkEditImage } from "../../../shared/ark-seedream.mjs";
 import {
   isOpenAiImagesProvider,

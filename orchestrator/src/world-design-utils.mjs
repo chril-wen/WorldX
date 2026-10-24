@@ -314,7 +314,14 @@ function normalizeHearsay(rawHearsay) {
   return { enabled: rawHearsay.enabled === true };
 }
 
-function normalizeWorldDesign(rawDesign) {
+/**
+ * 归一化世界设计 —— 把 LLM 返回的原始结构整理成内部统一形状。
+ *
+ * 注意 `export` 关键字：**2026-10-24 之前这里漏了 export**，
+ * 导致 6 个 importer 全部起不来（ESM 的具名导出在导入时就检查），
+ * 「创建世界」功能整个是坏的。6e16a7d 改这个文件时误删的。
+ */
+export function normalizeWorldDesign(rawDesign) {
   const rawRegions = Array.isArray(rawDesign?.regions)
     ? rawDesign.regions
     : Array.isArray(rawDesign?.locations)
