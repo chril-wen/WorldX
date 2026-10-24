@@ -298,8 +298,18 @@ export class LLMClient {
         createdAt: new Date().toISOString(),
       };
       this.costTracker.logCall(log);
-    } catch {
-      // DB not available during some tests — silently ignore
+    } catch (error) {
+      // 记账失败**不能静默**。
+      //
+      // 以前这里是空的 catch —— 阶段 1 搬家时丢掉了 SQLite 的 boolean→0/1 转换，
+      // 异常被吞掉，结果是**所有 LLM 调用的记账全部失效**，
+      // 而且没有任何报错：账单看着正常，实际一条没记。
+      //
+      // 现在至少 warn 出来。调用本身不受影响（记账是旁路）。
+      console.warn(
+        `[LLMClient] Failed to log call (taskType=${options.taskType}):`,
+        error,
+      );
     }
   }
 }

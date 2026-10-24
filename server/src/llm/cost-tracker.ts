@@ -62,7 +62,10 @@ export function logCall(log: LLMCallLog): void {
     log.completionTokens,
     log.cost,
     log.durationMs,
-    log.success,
+    // SQLite 不接受 boolean —— 必须转成 0/1。
+    // 阶段 1 搬家时这层转换丢了，core 的 catch{} 又把异常静默吞掉，
+    // 结果是**所有 LLM 调用的记账全部失效**，但没有任何报错。
+    log.success ? 1 : 0,
     log.error ?? null,
   );
 }
