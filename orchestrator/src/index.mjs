@@ -19,6 +19,7 @@ dotenv.config({ path: join(ROOT, ".env") });
 
 import { designWorld } from "./world-designer.mjs";
 import { generateConfigs } from "./config-generator.mjs";
+import { loadPlugins, runHook } from "./plugins/registry.mjs";
 
 const MAP_GENERATION_TIMEOUT_MS = parseInt(process.env.MAP_GENERATION_TIMEOUT_MS || "900000", 10);
 const CHARACTER_GENERATION_TIMEOUT_MS = parseInt(
@@ -50,7 +51,23 @@ async function main() {
   console.log(`Prompt:   ${userPrompt}\n`);
 
   console.log("━━━ Phase 1: Designing World ━━━");
-  const worldDesign = await designWorld(userPrompt);
+  const designed = await designWorld(userPrompt);
+
+  // 插件加载 —— 放在这里是因为后面的钩子要用。
+  // 加载失败只记警告，不中止（插件是可选扩展）。
+  const { plugins } = await loadPlugins({ worldDir, userPrompt, worldId });
+
+  const pluginCtx = {
+    worldDir,
+    userPrompt,
+    worldId,
+    logPrefix: "[Plugin]",
+  };
+
+  // design 钩子 —— 插件可以改世界设计
+  const designResult = await runHook(plugins, "design", designed, pluginCtx);
+  const worldDesign = designResult.value;
+
   writeFileSync(join(worldDir, "world-design.json"), JSON.stringify(worldDesign, null, 2));
 
   const mapDir = join(worldDir, "map");
@@ -83,12 +100,29 @@ async function main() {
 
   purgeFailedCharacters(charsDir, worldDesign);
 
+  // generate 钩子 —— 素材都生成完了，插件可以往 worldDir 里写东西
+  const generateResult = await runHook(plugins, "generate", worldDesign, pluginCtx);
+  if (generateResult.executed.length > 0) {
+    console.log(`[Plugin] generate 阶段跑了：${generateResult.executed.join(", ")}`);
+  }
+
   console.log("\n━━━ Phase 4: Generating Simulation Configs ━━━");
-  const { worldConfig, characterConfigs, sceneConfig } = generateConfigs(
-    worldDesign,
-    worldDir,
-    { originalPrompt: userPrompt },
-  );
+  // extendWorldConfig 钩子传给 generateConfigs —— 必须在**写盘之前**跑，
+  // 否则插件改的东西会被后面写的 world.json 覆盖掉。
+  const executedInConfig = [];
+  const configs = await generateConfigs(worldDesign, worldDir, {
+    originalPrompt: userPrompt,
+    extendConfig: async (bundle) => {
+      const result = await runHook(plugins, "extendWorldConfig", bundle, pluginCtx);
+      executedInConfig.push(...result.executed);
+      return result.value;
+    },
+  });
+
+  if (executedInConfig.length > 0) {
+    console.log(`[Plugin] extendWorldConfig 阶段跑了：${executedInConfig.join(", ")}`);
+  }
+  const { worldConfig, characterConfigs, sceneConfig } = configs;
 
   if (!KEEP_GENERATION_ARTIFACTS) {
     cleanupIntermediateImages(worldDir);

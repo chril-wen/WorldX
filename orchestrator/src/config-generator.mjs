@@ -3,7 +3,7 @@ import { join } from "path";
 import { normalizeWorldDesign } from "./world-design-utils.mjs";
 import { buildMainAreaPoints } from "./main-area-points.mjs";
 
-export function generateConfigs(worldDesign, worldDir, options = {}) {
+export async function generateConfigs(worldDesign, worldDir, options = {}) {
   const normalizedDesign = normalizeWorldDesign(worldDesign);
   const originalPrompt =
     typeof options.originalPrompt === "string" && options.originalPrompt.trim()
@@ -15,7 +15,6 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
 
   const tmjPath = join(mapDir, "06-final.tmj");
   const tmj = JSON.parse(readFileSync(tmjPath, "utf-8"));
-
   const regionsLayer = tmj.layers.find((l) => l.name === "regions");
   const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
   const collisionLayer = tmj.layers.find((l) => l.name === "collision");
@@ -96,7 +95,11 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
     },
   };
 
-  writeFileSync(join(configDir, "world.json"), JSON.stringify(worldConfig, null, 2));
+  // 注意：world.json **在这里不写** —— 要等插件的 extendWorldConfig 钩子跑完。
+  //
+  // 之前是直接 writeFileSync 在这个位置，结果插件改的东西全丢了：
+  // 钩子拿到的是内存里的对象，磁盘上的 world.json 早写好了。
+  // 写盘挪到函数末尾（见下方），那时代码已经跑完插件。
 
   const charactersDir = join(configDir, "characters");
   mkdirSync(charactersDir, { recursive: true });
@@ -179,19 +182,58 @@ export function generateConfigs(worldDesign, worldDir, options = {}) {
     if (iconicCues) config.iconicCues = iconicCues;
     if (canonicalRefs) config.canonicalRefs = canonicalRefs;
 
-    writeFileSync(join(charactersDir, `${charId}.json`), JSON.stringify(config, null, 2));
-
+    // 写盘挪到后面 —— 要等插件的 extendWorldConfig 钩子跑完。
+    // 插件可能改角色配置，在这儿写就把它改的丢了。
     return config;
   });
 
-  writeFileSync(join(configDir, "scene.json"), JSON.stringify(sceneConfig, null, 2));
+  // 插件钩子：让插件能增补世界配置。
+  //
+  // **必须在写盘之前** —— 插件改的是内存里的对象，
+  // 写盘早一步的话，插件的改动全丢。
+  let finalWorldConfig = worldConfig;
+  let finalCharacterConfigs = characterConfigs;
+  let finalSceneConfig = sceneConfig;
+
+  if (typeof options.extendConfig === "function") {
+    const extended = await options.extendConfig({
+      worldConfig,
+      characterConfigs,
+      sceneConfig,
+    });
+    if (extended) {
+      finalWorldConfig = extended.worldConfig ?? worldConfig;
+      finalCharacterConfigs = extended.characterConfigs ?? characterConfigs;
+      finalSceneConfig = extended.sceneConfig ?? sceneConfig;
+    }
+  }
+
+  for (const config of finalCharacterConfigs) {
+    writeFileSync(
+      join(charactersDir, `${config.id}.json`),
+      JSON.stringify(config, null, 2),
+    );
+  }
+
+  writeFileSync(
+    join(configDir, "world.json"),
+    JSON.stringify(finalWorldConfig, null, 2),
+  );
+  writeFileSync(
+    join(configDir, "scene.json"),
+    JSON.stringify(finalSceneConfig, null, 2),
+  );
 
   console.log(`[ConfigGenerator] Generated configs:`);
   console.log(`  world.json: ${locations.length} locations`);
-  console.log(`  characters: ${characterConfigs.length} configs`);
-  console.log(`  scene.json: ${sceneConfig.sceneType} scene`);
+  console.log(`  characters: ${finalCharacterConfigs.length} configs`);
+  console.log(`  scene.json: ${finalSceneConfig.sceneType} scene`);
 
-  return { worldConfig, characterConfigs, sceneConfig };
+  return {
+    worldConfig: finalWorldConfig,
+    characterConfigs: finalCharacterConfigs,
+    sceneConfig: finalSceneConfig,
+  };
 }
 
 function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) {
