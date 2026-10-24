@@ -294,19 +294,23 @@ export async function expandMap(worldDir, userPrompt, options = {}) {
   // 也要跟着平移，否则它们会标注到新区的位置上。
   const shiftX = expandSide === "left" ? newMeta.width - originalMeta.width : 0;
   const shiftY = expandSide === "top" ? newMeta.height - originalMeta.height : 0;
-  const mergedTMJ = mergeTMJIncremental(tmj, parsedNewRegions, newObjects, shiftX, shiftY);
+  const mergeResult = mergeTMJIncremental(tmj, parsedNewRegions, newObjects, shiftX, shiftY);
+  const mergedTMJ = mergeResult.tmj;
 
   writeFileSync(tmjPath, JSON.stringify(mergedTMJ, null, 2));
   console.log("[ExpandMap] Merged TMJ written to " + tmjPath);
 
   // ── 9. 更新 world.json ───────────────────────────────────────────────────
   console.log("[ExpandMap] Updating world.json...");
+  // 只写真正进了 TMJ 的区域——被去重跳过的区域不该在 world.json 里
+  // 留一个没有对应框的地点（那种地点在地图上点不到，角色也走不到）。
   const updatedWorldConfig = updateWorldConfig(
     worldConfig,
     newRegions,
     newObjects,
-    parsedNewRegions.regions,
-    parsedNewRegions.elements,
+    mergeResult.acceptedRegions,
+    mergeResult.acceptedElements,
+    mergeResult.acceptedRegions.map((r) => r.id),
   );
   updatedWorldConfig.worldSize = {
     ...(updatedWorldConfig.worldSize || {}),
@@ -1022,7 +1026,43 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
   }
 
   // 追加新区域
+  // 追加新区域。
+  //
+  // 去重两个维度：
+  //   1. id 相同 —— 扩同一个地方两次，第二次不该再往 TMJ 里塞一个同名框
+  //   2. 框完全相同 —— 视觉模型给两个区域返回了同一个框（实测
+  //      「镇口石牌坊」「临河杂货铺」「巷口酒肆」共用 x2600,y40）
+  //
+  // 这类重复累积起来会让地图上出现好几个叠在一起的同名区域，
+  // 角色不知道该去哪。重复的框直接丢弃，保留先来的那个。
+  const existingRegionIds = new Set();
+  const existingRegionBoxes = new Set();
+  for (const obj of regionsLayer?.objects || []) {
+    const propId = (obj.properties || []).find((p) => p.name === "id")?.value;
+    if (propId) existingRegionIds.add(propId);
+    existingRegionBoxes.add(obj.x + "," + obj.y + "," + obj.width + "x" + obj.height);
+  }
+
+  const acceptedRegions = [];
   for (const r of parsed.regions) {
+    const regionId = r.id || r.name;
+    const boxKey =
+      (r.topLeft?.x ?? 0) + "," + (r.topLeft?.y ?? 0) + "," +
+      Math.max(1, (r.bottomRight?.x ?? 0) - (r.topLeft?.x ?? 0)) + "x" +
+      Math.max(1, (r.bottomRight?.y ?? 0) - (r.topLeft?.y ?? 0));
+
+    if (existingRegionIds.has(regionId)) {
+      console.warn("[ExpandMap] Region '" + regionId + "' already in TMJ, skipped");
+      continue;
+    }
+    if (existingRegionBoxes.has(boxKey)) {
+      console.warn("[ExpandMap] Region '" + regionId + "' has the same box as an existing region, skipped");
+      continue;
+    }
+    existingRegionIds.add(regionId);
+    existingRegionBoxes.add(boxKey);
+    acceptedRegions.push(r);
+
     maxId++;
     const obj = {
       id: maxId,
@@ -1035,7 +1075,7 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
       rotation: 0,
       visible: true,
       properties: [
-        { name: "id", type: "string", value: r.id || r.name },
+        { name: "id", type: "string", value: regionId },
         { name: "description", type: "string", value: r.description || "" },
         { name: "regionType", type: "string", value: r.type || "" },
         { name: "actions", type: "string", value: JSON.stringify(r.actions || []) },
@@ -1046,6 +1086,7 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
   }
 
   // 追加新物件
+  const acceptedElements = [];
   for (const o of parsed.elements || []) {
     maxId++;
     const obj = {
@@ -1064,6 +1105,7 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
       ],
     };
     if (objectsLayer?.objects) objectsLayer.objects.push(obj);
+    acceptedElements.push(o);
   }
 
   // 新区域默认可走：碰撞清零
@@ -1088,7 +1130,9 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
     }
   }
 
-  return tmj;
+  // 返回实际写进 TMJ 的区域。world.json 必须按这份清单来写——
+  // 被去重跳过的区域不该在 world.json 里留一个没有对应框的地点。
+  return { tmj, acceptedRegions, acceptedElements };
 }
 
 /** 画布变宽后，把碰撞层数据搬进新的网格，旧区域数据保持不变 */
@@ -1139,7 +1183,14 @@ export function resizeCollisionGrid(tmj, oldW, oldH, newW, newH, offsetX = 0, of
  * 客户端（MapManager）从 TMJ 读区域，服务端（WorldManager）从 world.json 读地点，
  * 两边 id 对不上就会出现「客户端看得见、服务端不知道」的区域。
  */
-export function updateWorldConfig(worldConfig, newRegions, newObjects, parsedRegions, parsedElements) {
+export function updateWorldConfig(
+  worldConfig,
+  newRegions,
+  newObjects,
+  parsedRegions,
+  parsedElements,
+  onlyTheseIds = null,
+) {
   const existingLocations = Array.isArray(worldConfig.locations) ? worldConfig.locations : [];
   const existingIds = new Set(existingLocations.map((l) => l.id));
 
@@ -1177,6 +1228,10 @@ export function updateWorldConfig(worldConfig, newRegions, newObjects, parsedReg
 
   const newLocations = newRegions
     .filter((r) => !existingIds.has(r.id))
+    // onlyTheseIds 非空时，只写真正进了 TMJ 的区域。
+    // 被去重跳过的区域不该在 world.json 里留一个没有对应框的地点——
+    // 那种地点在地图上点不到，角色也走不到。
+    .filter((r) => !onlyTheseIds || onlyTheseIds.includes(r.id))
     .map((r) => {
       const location = {
         id: r.id,

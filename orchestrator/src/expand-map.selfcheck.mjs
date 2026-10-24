@@ -99,7 +99,7 @@ console.log("\n=== 1. 碰撞网格扩容顺序 ===");
     bottomRight: { x: 1920 + 260, y: 420 },
   };
 
-  mergeTMJIncremental(tmj, { regions: [newRegion], elements: [] }, []);
+  mergeTMJIncremental(tmj, { regions: [newRegion], elements: [] }, []).tmj;
 
   const collision = tmj.layers.find((l) => l.name === "collision");
   const tx = Math.floor(newRegion.topLeft.x / TILE);
@@ -145,7 +145,7 @@ console.log("\n=== 2. TMJ id 与 world.json location id 一致性 ===");
   check("坐标已换算到全局", parsed.regions[0].topLeft.x === 2020, String(parsed.regions[0].topLeft.x));
 
   const tmj = makeTMJ();
-  mergeTMJIncremental(tmj, parsed, []);
+  mergeTMJIncremental(tmj, parsed, []).tmj;
 
   const worldConfig = updateWorldConfig(
     { locations: [{ id: "main_area", name: "主区域", description: "", adjacentLocations: [], objects: [] }] },
@@ -572,7 +572,7 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
 
     // 向上扩展 640 像素：旧图下移 640
     const SHIFT = 640;
-    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, SHIFT);
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, SHIFT).tmj;
 
     const movedRegion = regionsLayer.objects[ri];
     const movedObject = objectsLayer.objects[oi];
@@ -591,7 +591,7 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
     regionsLayer.objects.push({ id: 99, name: "r", x: 100, y: 200, width: 50, height: 60, properties: [] });
 
     const SHIFT = 640;
-    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], SHIFT, 0);
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], SHIFT, 0).tmj;
 
     check("向左扩展: 旧 region 的 x 平移", regionsLayer.objects[ri].x === 100 + SHIFT, String(regionsLayer.objects[ri].x));
     check("向左扩展: 旧 region 的 y 不变", regionsLayer.objects[ri].y === 200, String(regionsLayer.objects[ri].y));
@@ -604,7 +604,7 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
     const ri = regionsLayer.objects.length;
     regionsLayer.objects.push({ id: 99, name: "r", x: 100, y: 200, width: 50, height: 60, properties: [] });
 
-    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, 0);
+    mergeTMJIncremental(tmj, { regions: [], elements: [] }, [], 0, 0).tmj;
 
     check("向右扩展: 旧 region 坐标不变", regionsLayer.objects[ri].x === 100 && regionsLayer.objects[ri].y === 200);
   }
@@ -835,6 +835,60 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
       items[0].topLeft.x !== items[1].topLeft.x,
       JSON.stringify(items.map((i) => i.topLeft)),
     );
+  }
+
+  // ── TMJ 合并时去重：同 id / 同框 ──────────────────────────────────────────
+  //
+  // 扩 5-10 次必然遇到：视觉模型给两个区域返回同一个框，或者同一个地方
+  // 被扩了两次。重复的框会叠在地图上，角色不知道该去哪个。
+  {
+    const tmj = makeTMJ();
+    const result = mergeTMJIncremental(
+      tmj,
+      {
+        regions: [
+          { id: "tea_house", name: "已存在", topLeft: { x: 10, y: 10 }, bottomRight: { x: 90, y: 90 } },
+          { id: "brand_new", name: "全新的", topLeft: { x: 900, y: 900 }, bottomRight: { x: 990, y: 990 } },
+        ],
+        elements: [],
+      },
+      [],
+    );
+    const reg = result.tmj.layers.find((l) => l.name === "regions");
+    const ids = reg.objects.map((o) => (o.properties || []).find((p) => p.name === "id")?.value);
+    // tea_house 是 makeTMJ 自带的原有区域，应当还在（没被误删）；
+    // 新加的那个同名 tea_house 必须被跳过——所以总数不该变。
+    check("id 已存在的区域没有重复写入", ids.filter((i) => i === "tea_house").length === 1, ids.join(","));
+    check("原有区域仍在", ids.includes("tea_house"), ids.join(","));
+    check("新区域仍然写入", ids.includes("brand_new"), ids.join(","));
+    check("返回实际接受的区域", result.acceptedRegions.length === 1, String(result.acceptedRegions.length));
+    check("接受的区域是新区域", result.acceptedRegions[0].id === "brand_new");
+  }
+
+  // 同框不同 id：也要跳过
+  {
+    const tmj = makeTMJ();
+    const existing = tmj.layers.find((l) => l.name === "regions").objects[0];
+    const result = mergeTMJIncremental(
+      tmj,
+      {
+        regions: [
+          {
+            id: "different_id",
+            name: "另一个名字",
+            topLeft: { x: existing.x, y: existing.y },
+            bottomRight: { x: existing.x + existing.width, y: existing.y + existing.height },
+          },
+        ],
+        elements: [],
+      },
+      [],
+    );
+    const reg = result.tmj.layers.find((l) => l.name === "regions");
+    check("框与已有区域相同的被跳过", !reg.objects.some((o) =>
+      (o.properties || []).some((p) => p.name === "id" && p.value === "different_id"),
+    ));
+    check("同框去重后 acceptedRegions 为空", result.acceptedRegions.length === 0);
   }
 
   // ── 设计阶段同名区域去重 ──
