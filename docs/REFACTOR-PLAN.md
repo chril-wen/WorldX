@@ -152,19 +152,45 @@ export const WORLD_CENTER = "main_area";  // 集中一处，全局引用
 ```
 更彻底的做法是让 `main_area` 成为 world.json 的一个**声明式字段**（`world.centerLocationId`），代码不再假设它的字面值。55 处替换成读配置。
 
+### 2.4 world.json 版本化
+
+```ts
+// packages/core/src/contracts/world.ts
+export const WORLD_SCHEMA_VERSION = 2;
+
+export interface WorldConfig {
+  schemaVersion: number;   // 缺失时视为 1
+  worldName: string;
+  centerLocationId: string; // 替代散落的 main_area 硬编码
+  // ...
+}
+
+export function migrateWorldConfig(raw: unknown): WorldConfig {
+  // v1 → v2：补 schemaVersion、centerLocationId
+}
+```
+
+迁移函数放在 `packages/core`，server 和 orchestrator 共用，读到旧 world.json 自动升级后再处理。
+
+---
+
 ---
 
 ## 三、分阶段实施
 
 每个阶段独立可运行、可回退、独立提交。
 
-### 阶段 0：建立保护网（0.5 天）
+### 阶段 0：建立保护网（3-5 天）
 **目标**：重构前先有测试网，否则改不动。
 
-- 把 `expand-map.selfcheck.mjs` 的模式推广到 server 核心
-- 给 `packages/core` 候选模块补单元测试：Memory / Needs / Emotion / Decision / Perception
-- 加 `npm run check` = 类型检查 + 单元测试 + selfcheck 三合一
+- 装 vitest（全仓统一，替代零散的自检脚本）
+- server core 单测：Memory / Needs / Emotion / Decision / Perception / ActionExecutor
+- client 单测：`MapManager`、`PathfindingManager`（**这两个不依赖 Phaser，是纯逻辑**）、`event-format`、`time-i18n`、`time-sync`、`library-world-sort`
+- 保留并迁移 `expand-map.selfcheck.mjs` 为 vitest 用例
+- 加 `npm run check` = 类型检查 + 单元测试 三合一
 - **不改任何业务逻辑**
+
+> client 测试范围已确认包含。Phaser 相关代码（`WorldScene`、`CharacterMovement`）不做单测，靠手动冒烟。
 
 **产出**：`npm run check` 一条命令验证全仓健康。
 
@@ -212,21 +238,24 @@ export const WORLD_CENTER = "main_area";  // 集中一处，全局引用
 **验收**：`grep -rn "main_area" server/src packages/ | wc -l` 显著下降；改名测试通过。
 
 ### 阶段 5：client 重构（5-10 天）
-**目标**：UI 与引擎解耦，可整块替换。
+**目标**：UI 层完全重写，引擎与地图数据层不动。
 
-- `packages/client-core/`：地图数据层（TMJ 解析、寻路网格、区域查询）从 Phaser 里剥出
-- `client/src/scenes/WorldScene.ts`（924 行）拆分
-- 面板化改造：`CreateWorldPage`（1268 行）拆成独立步骤组件
-- 引入可替换的 UI 层——你的新设计可以只换 `client/src/ui/`
+**已确认：UI 层要完全重写。** 阶段 5 的重点因此变成「把可复用的部分保护好」，而不是「改造现有 UI」。
 
-**验收**：能只保留 Phaser 渲染、替换整个 UI 而不动引擎。
+- `packages/client-core/`：把 `MapManager`（695 行）+ `PathfindingManager`（412 行）搬进去
+  —— 这两个已确认**不依赖 Phaser**，是纯逻辑，可直接测、可被任何前端复用
+- `packages/client-core/` 补齐：TMJ 解析、区域查询、walkable 网格、坐标换算
+- `client/src/scenes/WorldScene.ts`（924 行）里的地图装载逻辑迁到 client-core
+- 现有 UI 面板（`client/src/ui/` 6100 行）**标记为 legacy**，不再投入
+- 新 UI 在 `apps/client-new/` 起，不受旧代码约束
+- 旧 client 保持可运行，直到新 UI 就绪再切
+
+**验收**：新 UI 只依赖 `packages/client-core` + server API，能独立渲染地图并驱动角色；旧 client 不受影响。
 
 ### 阶段 6：工具链与文档（2 天）
 - `apps/cli`：命令行生成世界、看状态、跑 tick
 - 开发文档：架构图、插件开发指南、配置参考
 - 保留 MIT LICENSE 和原作者致谢
-
----
 
 ## 四、工作区与分支策略
 
@@ -274,9 +303,16 @@ main                    # 始终可运行
 
 ---
 
-## 七、待你确认的点
+## 七、已确定的决策
 
-1. **阶段 0 的测试范围**——只测 core 引擎（推荐），还是也要覆盖 client？
-2. **是否保留 Phaser**——阶段 5 是「保留 Phaser 但解耦」，如果你打算换渲染引擎（Pixi/原生 Canvas），阶段 5 要重新设计。
-3. **插件的形态**——只用 TypeScript 文件，还是也支持 JSON/YAML 声明式插件？
-4. **world.json 是否要版本化**——重构会改 schema，加 `schemaVersion` 字段做迁移？
+| 决策项 | 结论 | 影响 |
+|---|---|---|
+| 测试范围 | **core + client 都要** | 阶段 0 扩到 3-5 天，装 vitest。client 测 `MapManager`/`PathfindingManager` 等纯逻辑，Phaser 代码靠手动冒烟 |
+| Phaser | **UI 层完全重写** | 阶段 5 重点变为「保护可复用部分」。`MapManager`+`PathfindingManager` 提到 `packages/client-core/`；旧 UI 标记 legacy 不再投入 |
+| 插件形态 | **TypeScript 文件** | 实现 `WorldPlugin` 接口。配置类的改动（换提示词/换模型）走 `config/`，不占插件位 |
+| world.json | **加版本 + 迁移函数** | 加 `schemaVersion` 字段 + `migrateWorldConfig()`，旧世界自动升级 |
+
+### 仍然待定
+
+- 新 UI 用什么技术栈（React 继续？Vue？Svelte？）——不影响前 5 个阶段
+- `packages/` 用 npm workspaces 还是 pnpm——阶段 1 开工前定即可
