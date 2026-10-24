@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export async function designWorld(userPrompt) {
   const { chatJSON } = await import("./models/llm-client.mjs");
 
-  const template = readFileSync(join(__dirname, "../prompts/design-world.md"), "utf-8");
+  const template = readFileSync(join(__dirname, "../../prompts/world-creation.md"), "utf-8");
   const prompt = template.replace(/\{\{userPrompt\}\}/g, userPrompt);
 
   console.log("[WorldDesigner] Designing world from prompt...");

@@ -1,8 +1,8 @@
 /**
- * 提示词模板来源的 server 侧实现 —— 读 `configs/prompts/*.md`。
+ * 提示词模板来源的 server 侧实现 —— 读仓库根的 `prompts/*.md`。
  *
  * core 只认 `PromptTemplateSource` 契约。
- * 阶段 2 会把这批模板统一到仓库根的 `prompts/` 目录，届时只改这一处。
+ * 阶段 2 之后模板统一在仓库根，路径解析在 `utils/repo-paths.ts`。
  */
 
 import type { PromptTemplateSource } from "@worldx/core";

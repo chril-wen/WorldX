@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Quick demo: call the design-world LLM and print raw + normalized output.
+ * Quick demo: call the world-creation LLM and print raw + normalized output.
  * Usage: node orchestrator/src/demo-design.mjs "你的世界描述"
  */
 import dotenv from "dotenv";
@@ -18,7 +18,7 @@ const { normalizeWorldDesign } = await import("./world-design-utils.mjs");
 const userPrompt = process.argv.slice(2).join(" ") ||
   "北宋汴京的一条夜市街，有卖炊饼的、算命的、当铺掌柜、捕快和一个穿越来的现代人";
 
-const template = readFileSync(join(__dirname, "../prompts/design-world.md"), "utf-8");
+const template = readFileSync(join(__dirname, "../../prompts/world-creation.md"), "utf-8");
 const prompt = template.replace(/\{\{userPrompt\}\}/g, userPrompt);
 
 console.log("━━━ Calling LLM ━━━");

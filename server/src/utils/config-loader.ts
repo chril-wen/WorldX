@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { WorldConfig, CharacterProfile, SceneConfig } from "../types/index.js";
 import type { IconicCues, CanonicalRefs, CharacterAnchor } from "../types/character.js";
+import { LEGACY_CONFIGS_DIR, PROMPTS_DIR } from "./repo-paths.js";
 
 let worldDir: string | null = null;
 let cachedWorldConfig: WorldConfig | null = null;
@@ -9,9 +10,14 @@ let cachedCharacterProfiles: CharacterProfile[] | null = null;
 let cachedPromptTemplates: Map<string, string> = new Map();
 let cachedSceneConfig: SceneConfig | null = null;
 
-const CONFIGS_DIR = fs.existsSync(path.resolve("configs"))
-  ? path.resolve("configs")
-  : path.resolve("../configs");
+/**
+ * 配置文件目录 —— 基于 `__dirname` 推导，跟进程从哪启动无关。
+ *
+ * 以前这里是 `fs.existsSync(path.resolve("configs")) ? ... : ...` ——
+ * 按进程 cwd 解析。从 `server/` 启动能找到，从仓库根启动就找不到了，
+ * 而且**找错不报错**：提示词读不到会静默降级，数据库会写到另一个目录去。
+ */
+const CONFIGS_DIR = LEGACY_CONFIGS_DIR;
 
 export function setWorldDir(dir: string): void {
   worldDir = dir;
@@ -135,7 +141,7 @@ export function loadSceneConfig(): SceneConfig {
 
 export function loadPromptTemplate(name: string): string {
   if (cachedPromptTemplates.has(name)) return cachedPromptTemplates.get(name)!;
-  const filePath = path.join(CONFIGS_DIR, "prompts", `${name}.md`);
+  const filePath = path.join(PROMPTS_DIR, `${name}.md`);
   const content = fs.readFileSync(filePath, "utf-8");
   cachedPromptTemplates.set(name, content);
   return content;

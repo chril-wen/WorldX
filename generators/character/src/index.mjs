@@ -19,6 +19,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, "..");
 const WORLD_SEED_ROOT = resolve(PROJECT_ROOT, "../..");
+/** 仓库根的 `prompts/character/` —— 阶段 2 之后所有提示词模板都在仓库根统一存放 */
+const PROMPTS_DIR = resolve(WORLD_SEED_ROOT, "prompts/character");
 
 dotenv.config({ path: resolve(WORLD_SEED_ROOT, ".env") });
 
@@ -75,7 +77,7 @@ async function main() {
 
   const referenceImg = readFileSync(join(PROJECT_ROOT, "reference-img.png"));
   const promptTemplate = readFileSync(
-    join(PROJECT_ROOT, "prompts/generate-sprite.md"),
+    join(PROMPTS_DIR, "generate-sprite.md"),
     "utf-8",
   );
 

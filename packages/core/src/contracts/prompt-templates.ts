@@ -1,8 +1,8 @@
 /**
  * 提示词模板来源 —— core 读模板，不关心模板从哪来。
  *
- * server 的实现读 `configs/prompts/*.md`；阶段 2 会把这批模板统一到仓库根的
- * `prompts/` 目录，那时只改 server 侧的实现，core 不动。
+ * server 的实现读仓库根的 `prompts/*.md`（阶段 2 之后统一在那里）。
+ * core 不碰文件系统，所以这里只声明「能按名字读到一个模板」这件事。
  */
 
 export interface PromptTemplateSource {
