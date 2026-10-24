@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { GameTime, SimulationEvent } from "../types/index.js";
 import { listAllWorlds } from "../utils/world-directories.js";
-import { getTimelineSnapshot } from "../store/snapshot-store.js";
+import { getTimelineSnapshot, restoreTimelineSnapshot } from "../store/snapshot-store.js";
 
 export interface TimelineMeta {
   id: string;
@@ -393,6 +393,50 @@ export class TimelineManager {
     fs.writeFileSync(path.join(newDir, "meta.json"), JSON.stringify(meta, null, 2));
 
     return newId;
+  }
+
+  /**
+   * 把时间线恢复到某个快照。
+   *
+   * **DB 和事件流必须一起回退** —— 只还原 state.db 的话，
+   * 磁盘上的状态是快照时的，events.jsonl 里却还记着快照之后发生的事，
+   * 回放时会重演那些已经「没发生过」的事件。
+   * 这是「状态和事件不一致」的另一个入口，跟分叉时截断事件流是同一个道理。
+   */
+  restoreToSnapshot(
+    worldDir: string,
+    timelineId: string,
+    snapshotId: string,
+  ): { day: number; tick: number } {
+    const dir = this.getTimelineDir(worldDir, timelineId);
+    const dbPath = this.getTimelineDbPath(worldDir, timelineId);
+    if (!fs.existsSync(dbPath)) {
+      throw new Error(`Timeline not found: ${timelineId}`);
+    }
+
+    const snapshot = getTimelineSnapshot({ dir, dbPath }, snapshotId);
+    if (!snapshot) {
+      throw new Error(`Snapshot not found: ${snapshotId}`);
+    }
+
+    // 1) 状态还原
+    restoreTimelineSnapshot({ dir, dbPath }, snapshotId);
+
+    // 2) 事件流回退到快照时刻
+    this.truncateEventsToTick(worldDir, timelineId, snapshot.gameDay, snapshot.gameTick);
+
+    // 3) meta 对齐
+    const metaPath = path.join(dir, "meta.json");
+    if (fs.existsSync(metaPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as TimelineMeta;
+      const frames = this.readTimelineEvents(worldDir, timelineId);
+      meta.tickCount = frames.filter((f) => f.type === "tick").length;
+      meta.lastGameTime = { day: snapshot.gameDay, tick: snapshot.gameTick };
+      meta.updatedAt = new Date().toISOString();
+      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    }
+
+    return { day: snapshot.gameDay, tick: snapshot.gameTick };
   }
 
   /** 分叉用的 id —— 加前缀区分于普通时间线，便于一眼看出是分叉出来的 */

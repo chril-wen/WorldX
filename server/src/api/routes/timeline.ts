@@ -11,7 +11,6 @@ import {
   createTimelineSnapshot,
   deleteTimelineSnapshot,
   listTimelineSnapshots,
-  restoreTimelineSnapshot,
 } from "../../store/snapshot-store.js";
 import {
   compareTimelineStates,
@@ -303,8 +302,11 @@ router.post("/:id/snapshots/:snapshotId/restore", (req, res) => {
   const isCurrent = timelineId === appContext.timelineManager.getCurrentTimelineId();
 
   try {
-    restoreTimelineSnapshot(
-      timelineTarget(worldDir, timelineId),
+    // 恢复要同时回退 DB 和事件流 —— 只还原 DB 会让回放重演
+    // 「快照之后已经发生过、但状态里已经没有」的事件。
+    const at = appContext.timelineManager.restoreToSnapshot(
+      worldDir,
+      timelineId,
       req.params.snapshotId,
     );
 
@@ -314,7 +316,7 @@ router.post("/:id/snapshots/:snapshotId/restore", (req, res) => {
       appContext.switchTimeline(timelineId);
     }
 
-    res.json({ ok: true });
+    res.json({ ok: true, restoredTo: at });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

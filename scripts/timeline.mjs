@@ -167,6 +167,70 @@ async function cmdSnapshot() {
   console.log(`已创建快照 ${id}（day ${gameTime.day} tick ${gameTime.tick}）`);
 }
 
+/**
+ * 问 server「现在有没有模拟正在跑」。
+ *
+ * 恢复快照要把磁盘上的库换掉 —— 如果 server 开着，它：
+ *   1) 持有 state.db 的文件句柄（Windows 上直接 EBUSY，删不掉 -wal）
+ *   2) 内存里的角色状态是旧的，跟磁盘对不上
+ * 所以 server 开着的时候恢复，得到的要么是失败，要么是半截状态。
+ *
+ * 返回 null = 连不上 server（没开），此时 CLI 是唯一持有者，可以放心恢复。
+ */
+async function queryServerBusy() {
+  const base = process.env.SERVER_BASE_URL || "http://localhost:3100";
+  try {
+    const res = await fetch(`${base}/api/simulation/status`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.activeSimulationTicks === "number"
+      ? data.activeSimulationTicks
+      : null;
+  } catch {
+    // server 没在跑 —— 不知道状态
+    return null;
+  }
+}
+
+async function cmdRestore() {
+  const worldDir = resolveWorldDir(arg("--world"));
+  const timelineId = args[1];
+  const snapshotId = args[2];
+  if (!timelineId || !snapshotId) {
+    throw new Error("用法：npm run timeline -- restore <timelineId> <snapshotId> [--force]");
+  }
+
+  const p = dbPath(worldDir, timelineId);
+  if (!fs.existsSync(p)) throw new Error(`Timeline not found: ${timelineId}`);
+
+  // 保护：server 开着就别动它的库
+  const busy = await queryServerBusy();
+  if (busy !== null) {
+    if (!has("--force")) {
+      throw new Error(
+        `server 正在运行（${busy > 0 ? `${busy} 个 tick 未完成` : "空闲"}），` +
+        `它的内存状态和磁盘上的库对不上，恢复会得到半截状态。\n` +
+        `请先停掉 server 再恢复，或者加 --force 强制恢复。`,
+      );
+    }
+    console.warn("警告：server 正在运行，强制恢复可能让它的内存状态不一致。");
+  }
+
+  const { TimelineManager } = await import("../server/src/services/timeline-manager.ts");
+  const tm = new TimelineManager();
+  // restoreToSnapshot 同时还原 DB 和事件流 —— 只还原 DB 会让回放
+  // 重演「快照之后已经发生过、但状态里已经没有」的事件。
+  const at = tm.restoreToSnapshot(worldDir, timelineId, snapshotId);
+
+  console.log(`已恢复时间线 ${timelineId} 到快照 ${snapshotId}`);
+  console.log(`  状态与事件流都已回退到 day ${at.day} tick ${at.tick}`);
+  if (busy !== null) {
+    console.log("  server 还在跑 —— 请重启它或切换时间线，让运行时重新加载状态。");
+  }
+}
+
 async function cmdFork() {
   const worldDir = resolveWorldDir(arg("--world"));
   const timelineId = args[1];
@@ -247,16 +311,18 @@ const COMMANDS = {
   list: cmdList,
   snapshots: cmdSnapshots,
   snapshot: cmdSnapshot,
+  restore: cmdRestore,
   fork: cmdFork,
   diff: cmdDiff,
 };
 
 const command = args[0];
 if (!command || !COMMANDS[command]) {
-  console.error("用法：npm run timeline -- <list|snapshots|snapshot|fork|diff> ...");
+  console.error("用法：npm run timeline -- <list|snapshots|snapshot|restore|fork|diff> ...");
   console.error("  list                                   列出时间线");
   console.error("  snapshots <timelineId>                 列出快照");
   console.error("  snapshot  <timelineId> [--desc ...]    创建快照");
+  console.error("  restore  <timelineId> <snapshotId> [--force]  恢复到快照");
   console.error("  fork <timelineId> <snapshotId> [--label ...]  从快照分叉");
   console.error("  diff <timelineA> <timelineB>           对比两条时间线");
   process.exit(1);

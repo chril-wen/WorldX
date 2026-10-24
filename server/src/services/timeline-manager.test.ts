@@ -538,4 +538,84 @@ describe("TimelineManager · 分叉", () => {
       }
     });
   });
+
+  describe("restoreToSnapshot", () => {
+    /** 造一个「跑到 tick 2 打快照、然后继续跑到 tick 4」的时间线 */
+    function makeRunningTimeline(id: string): { timelineId: string; snapId: string } {
+      const src = makeTimeline(id, TICKS.slice(0, 2));
+      const snapId = createTimelineSnapshot(
+        {
+          dir: tm.getTimelineDir(worldDir, id),
+          dbPath: tm.getTimelineDbPath(worldDir, id),
+        },
+        { day: 1, tick: 2 },
+        "",
+      );
+      // 世界继续跑
+      appendTicks(id, TICKS.slice(2));
+      appendDbEvents(id, [
+        { gameDay: 1, gameTick: 3, id: "e3" },
+        { gameDay: 1, gameTick: 4, id: "e4" },
+      ]);
+      return { timelineId: id, snapId };
+    }
+
+    it("状态回退到快照时刻", () => {
+      const { timelineId, snapId } = makeRunningTimeline("tl-r");
+
+      initDatabase(tm.getTimelineDbPath(worldDir, timelineId));
+      getDb()
+        .prepare("UPDATE character_states SET emotion_valence = 42 WHERE character_id = 'char_1'")
+        .run();
+      closeDb();
+
+      tm.restoreToSnapshot(worldDir, timelineId, snapId);
+
+      const db = new Database(tm.getTimelineDbPath(worldDir, timelineId), { readonly: true });
+      try {
+        const row = db
+          .prepare("SELECT emotion_valence FROM character_states WHERE character_id = 'char_1'")
+          .get() as any;
+        expect(row.emotion_valence).toBe(1.5);
+      } finally {
+        db.close();
+      }
+    });
+
+    it("事件流也回退到快照时刻 —— 只还原 DB 会让回放重演已回退的事件", () => {
+      const { timelineId, snapId } = makeRunningTimeline("tl-r");
+      expect(jsonlEventIds(timelineId)).toEqual(["e1", "e2", "e3", "e4"]);
+
+      tm.restoreToSnapshot(worldDir, timelineId, snapId);
+
+      expect(jsonlEventIds(timelineId)).toEqual(["e1", "e2"]);
+    });
+
+    it("DB 与 events.jsonl 恢复后仍然一致", () => {
+      const { timelineId, snapId } = makeRunningTimeline("tl-r");
+
+      tm.restoreToSnapshot(worldDir, timelineId, snapId);
+
+      expect([...dbEventIds(timelineId)].sort()).toEqual([...jsonlEventIds(timelineId)].sort());
+    });
+
+    it("meta 的 lastGameTime 和 tickCount 跟着回退", () => {
+      const { timelineId, snapId } = makeRunningTimeline("tl-r");
+
+      tm.restoreToSnapshot(worldDir, timelineId, snapId);
+
+      const meta = JSON.parse(
+        fs.readFileSync(path.join(tm.getTimelineDir(worldDir, timelineId), "meta.json"), "utf-8"),
+      );
+      expect(meta.lastGameTime).toEqual({ day: 1, tick: 2 });
+      expect(meta.tickCount).toBe(2);
+    });
+
+    it("快照不存在时抛错", () => {
+      const { timelineId } = makeRunningTimeline("tl-r");
+      expect(() => tm.restoreToSnapshot(worldDir, timelineId, "不存在")).toThrow(
+        /Snapshot not found/,
+      );
+    });
+  });
 });
