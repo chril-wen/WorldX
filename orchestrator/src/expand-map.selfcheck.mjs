@@ -630,8 +630,16 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
   // 长条（垂直扩展的新区）：按宽度切
   const wide = plan(3200, 640);
   check("3200x640 切成多块", wide.length > 1, String(wide.length));
-  check("每块宽度接近高度", wide.every((s) => s.height === 640 && s.width <= 640 * 1.5), JSON.stringify(wide.map(s=>s.width)));
   check(
+    "块数尽量少（每次分块都是一次视觉调用，可能超时重试）",
+    wide.length <= 4,
+    String(wide.length),
+  );
+  check(
+    "每块宽度接近高度",
+    wide.every((s) => s.height === 640 && s.width <= 640 * 2),
+    JSON.stringify(wide.map((s) => s.width)),
+  );  check(
     "切块覆盖整个新区宽度",
     wide.reduce((sum, s) => sum + s.width, 0) === 3200,
     String(wide.reduce((sum, s) => sum + s.width, 0)),
@@ -779,6 +787,54 @@ console.log("\n=== 5. 上下文裁剪：画布尺寸可控且新区位置正确 
     );
     check("多候选取面积最大的（而非第一个）", items.length === 1 && items[0].topLeft.x === 100, JSON.stringify(items));
     check("多候选时没有退化框", items[0].bottomRight.x === 400 && items[0].bottomRight.y === 300);
+  }
+
+  // ── 分块坐标换算：toGlobal 收的是整个框，不是点 ──────────────────────────
+  //
+  // 之前分块循环里写的是 toGlobal(r.topLeft)——传进去的是「左上角这个点」，
+  // 而 convertVisionBoxToGlobal 内部读的是 box.topLeft / box.bottomRight。
+  // 于是所有坐标算出来都是 0，框塌缩成一点（面积 0），
+  // 新区域的坐标在 TMJ 里退化成 0->1。
+  {
+    const geom = { imgW: 768, imgH: 154, tileWidth: 640, tileHeight: 640, offsetX: 640, offsetY: 0 };
+    // 整框传进去
+    const whole = convertVisionBoxToGlobal(
+      { topLeft: { x: 100, y: 50 }, bottomRight: { x: 400, y: 300 } },
+      geom,
+    );
+    // 只传左上角这个点（错误用法）
+    const point = convertVisionBoxToGlobal(
+      { topLeft: { x: 100, y: 50 }, bottomRight: { x: 400, y: 300 } }.topLeft,
+      geom,
+    );
+    check(
+      "整框换算得到非零面积",
+      (whole.bottomRight.x - whole.topLeft.x) * (whole.bottomRight.y - whole.topLeft.y) > 0,
+      JSON.stringify(whole),
+    );
+    check(
+      "只传点会塌缩成零面积（这正是 bug）",
+      (point.bottomRight.x - point.topLeft.x) * (point.bottomRight.y - point.topLeft.y) === 0,
+      JSON.stringify(point),
+    );
+  }
+
+  // ── 兜底框按格分配，不共用一个大框 ──
+  {
+    const designed = [
+      { id: "a", name: "区域A", description: "" },
+      { id: "b", name: "区域B", description: "" },
+    ];
+    const items = reconcileDesignedItems([], designed, "region", (b) => b, (_d, index) => ({
+      topLeft: { x: index * 100, y: 0 },
+      bottomRight: { x: index * 100 + 80, y: 80 },
+    }));
+    check("兜底框按序分配到不同格子", items.length === 2);
+    check(
+      "两个兜底框不重叠",
+      items[0].topLeft.x !== items[1].topLeft.x,
+      JSON.stringify(items.map((i) => i.topLeft)),
+    );
   }
 
   // ── 设计阶段同名区域去重 ──

@@ -623,10 +623,13 @@ export function planTileSlices(tileWidth, tileHeight, maxDim = 768) {
 
   const slices = [];
   if (aspect > 2) {
-    // 太宽：按宽度切。块宽取「高度×1.2」，让每块接近方形。
-    // 余下的最后一块如果太窄，就并回倒数第二块——一块 200x640 的窄条
-    // 缩完只剩 40x154，模型照样会退化。
-    const targetW = Math.max(1, Math.round(tileHeight * 1.2));
+    // 太宽：按宽度切。
+    //
+    // 块宽取「高度×1.8」而不是更小——块数直接决定视觉调用次数，而每次
+    // 调用都可能撞上网关的 240s 超时再重试一遍。3200x640 切成 3 块
+    // （每块 1067x640，比例 1.67）已经落在模型不退化的区间里，
+    // 比切成 5 块省掉两次往返。
+    const targetW = Math.max(1, Math.round(tileHeight * 1.8));
     const count = Math.ceil(tileWidth / targetW);
     // 重新分配宽度，让每块尽量等宽（余量摊给前面的块）
     const baseW = Math.floor(tileWidth / count);
@@ -639,7 +642,7 @@ export function planTileSlices(tileWidth, tileHeight, maxDim = 768) {
     }
   } else {
     // 太高：按高度切，逻辑对称
-    const targetH = Math.max(1, Math.round(tileWidth / 1.2));
+    const targetH = Math.max(1, Math.round(tileWidth / 1.8));
     const count = Math.ceil(tileHeight / targetH);
     const baseH = Math.floor(tileHeight / count);
     const remainder = tileHeight % count;
@@ -708,6 +711,14 @@ async function parseNewRegionCoordinates(opts) {
 
     if (!result) continue;
 
+    // 调试：打印视觉模型的原始返回，看它到底给了什么坐标
+    if (process.env.EXPAND_DEBUG_VISION) {
+      console.log(
+        "[ExpandMap][debug] slice " + (i + 1) + " img=" + imgW + "x" + imgH +
+          " raw=" + JSON.stringify(result.newRegions),
+      );
+    }
+
     // 块内坐标 -> 新区坐标 -> 全局坐标
     const geom = {
       imgW,
@@ -720,10 +731,12 @@ async function parseNewRegionCoordinates(opts) {
     const toGlobal = (box) => convertVisionBoxToGlobal(box, geom);
 
     for (const r of result.newRegions || []) {
-      parsedRegions.push({ ...r, topLeft: toGlobal(r.topLeft), bottomRight: toGlobal(r.bottomRight) });
+      // toGlobal 接收的是【整个框】（内部读 box.topLeft / box.bottomRight），
+      // 不能只传 r.topLeft —— 那样框会塌缩成一个点，面积变成 0。
+      parsedRegions.push({ ...r, ...toGlobal(r) });
     }
     for (const e of result.newElements || []) {
-      parsedElements.push({ ...e, topLeft: toGlobal(e.topLeft), bottomRight: toGlobal(e.bottomRight) });
+      parsedElements.push({ ...e, ...toGlobal(e) });
     }
 
     console.log(
@@ -742,25 +755,40 @@ async function parseNewRegionCoordinates(opts) {
   // 两阶段匹配：先按 id、再按名字精确匹配（跨所有块统一做），
   // 剩下的才按顺序配对。顺序配对必须放在统一层面——
   // 如果每块各自兜底，块 1 的陌生条目会抢走本该属于块 3 的区域。
+  // 兜底框：把新区横向均分成若干格，视觉漏掉的区域各占一格。
+  // 之前所有兜底项共用一个大框，于是它们叠在一起变成一个覆盖整片
+  // 新区的怪框——地图上看不出这是两个地方。
+  const makePlaceholder = (count) => {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const rows = Math.max(1, Math.ceil(count / cols));
+    const cellW = tileWidth / cols;
+    const cellH = tileHeight / rows;
+    return (d, index) => {
+      const c = index % cols;
+      const r = Math.floor(index / cols);
+      return {
+        topLeft: { x: offsetX + Math.round(c * cellW) + 40, y: offsetY + Math.round(r * cellH) + 40 },
+        bottomRight: {
+          x: offsetX + Math.round((c + 1) * cellW) - 40,
+          y: offsetY + Math.round((r + 1) * cellH) - 40,
+        },
+      };
+    };
+  };
+
   const regions = reconcileDesignedItems(
     parsedRegions,
     newRegions,
     "region",
     (b) => b,
-    {
-      topLeft: { x: offsetX + 40, y: offsetY + 40 },
-      bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
-    },
+    makePlaceholder(newRegions.length),
   );
   const elements = reconcileDesignedItems(
     parsedElements,
     newObjects,
     "element",
     (b) => b,
-    {
-      topLeft: { x: offsetX + 40, y: offsetY + 40 },
-      bottomRight: { x: offsetX + tileWidth - 40, y: offsetY + tileHeight - 40 },
-    },
+    makePlaceholder(newObjects.length),
   );
 
   return { regions, elements };
@@ -929,17 +957,23 @@ export function reconcileDesignedItems(
     }
   }
 
-  // 视觉漏掉的条目用占位框兜底，保证不会静默丢失
+  // 视觉漏掉的条目用占位框兜底，保证不会静默丢失。
+  // 占位框按新区切成格子依次分配——如果所有兜底项共用一个大框，
+  // 它们会叠在一起，地图上看起来就是一个覆盖整片新区的怪框。
   for (const d of designedItems || []) {
     if (!items.find((x) => x.id === d.id)) {
       console.warn("[ExpandMap] " + label + " not located by vision, using placeholder: " + d.name);
+      const ph =
+        typeof placeholderBox === "function"
+          ? placeholderBox(d, designedItems.indexOf(d))
+          : placeholderBox;
       items.push({
         ...d,
         name: d.name,
         description: d.description || "",
         type: d.type || "outdoor",
-        topLeft: placeholderBox?.topLeft ?? { x: 0, y: 0 },
-        bottomRight: placeholderBox?.bottomRight ?? { x: 0, y: 0 },
+        topLeft: ph?.topLeft ?? { x: 0, y: 0 },
+        bottomRight: ph?.bottomRight ?? { x: 0, y: 0 },
       });
     }
   }
