@@ -7,6 +7,8 @@ import { SimulationEngine } from "../simulation/simulation-engine.js";
 import { DecisionMaker } from "../simulation/decision-maker.js";
 import { DialogueGenerator } from "../simulation/dialogue-generator.js";
 import { initDatabase, closeDb } from "../store/db.js";
+import { createDefaultStorage } from "../store/storage-adapter.js";
+import { filesystemConfigSource } from "../store/config-source.js";
 import { reloadConfigs } from "../utils/config-loader.js";
 import { TimelineManager } from "./timeline-manager.js";
 import type { SceneConfig } from "../types/index.js";
@@ -153,13 +155,18 @@ export class AppContext {
   }
 
   private rebuildRuntime(): void {
-    this.worldManager = new WorldManager();
+    const storage = createDefaultStorage();
+    this.worldManager = new WorldManager(filesystemConfigSource, storage);
     this.worldManager.initialize(this.worldDirPath);
     if (this.sceneConfigOverride) {
       this.worldManager.applySceneConfigOverride(this.sceneConfigOverride);
     }
 
-    this.characterManager = new CharacterManager(this.worldManager);
+    this.characterManager = new CharacterManager(
+      this.worldManager,
+      storage,
+      filesystemConfigSource,
+    );
     this.characterManager.initialize();
 
     if (!this.llmClient) {

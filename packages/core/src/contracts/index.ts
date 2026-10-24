@@ -58,7 +58,13 @@ export type {
   MemoryStorage,
   CharacterStateStorage,
   DiaryStorage,
+  WorldStateStorage,
+  SnapshotStorage,
   MemoryQueryOptions,
+  ItemStock,
+  SnapshotMeta,
 } from "./storage.js";
+
+export type { WorldConfigSource } from "./world-config.js";
 
 export type { LLMClient } from "./llm-client.js";

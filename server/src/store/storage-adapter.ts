@@ -10,11 +10,15 @@ import type {
   CharacterStateStorage,
   DiaryStorage,
   MemoryStorage,
+  SnapshotStorage,
   Storage,
+  WorldStateStorage,
 } from "@worldx/core";
 import * as charStateStore from "../store/character-state-store.js";
 import * as memoryStore from "../store/memory-store.js";
 import * as diaryStore from "../store/diary-store.js";
+import * as worldStateStore from "../store/world-state-store.js";
+import * as snapshotStore from "../store/snapshot-store.js";
 
 export const sqliteMemoryStorage: MemoryStorage = {
   insertMemory: (memory) => memoryStore.insertMemory(memory),
@@ -40,11 +44,40 @@ export const sqliteDiaryStorage: DiaryStorage = {
   getDiaryEntries: (charId, gameDay) => diaryStore.getDiaryEntries(charId, gameDay),
 };
 
+export const sqliteWorldStateStorage: WorldStateStorage = {
+  initWorldState: (locations, opts) => worldStateStore.initWorldState(locations, opts),
+  getObjectState: (objectId) => worldStateStore.getObjectState(objectId),
+  getAllObjectStates: () => worldStateStore.getAllObjectStates(),
+  getObjectsByLocation: (locationId) => worldStateStore.getObjectsByLocation(locationId),
+  updateObjectState: (objectId, patch) => worldStateStore.updateObjectState(objectId, patch),
+  addUserToObject: (objectId, characterId) =>
+    worldStateStore.addUserToObject(objectId, characterId),
+  removeUserFromObject: (objectId, characterId) =>
+    worldStateStore.removeUserFromObject(objectId, characterId),
+  getGlobalState: (key) => worldStateStore.getGlobalState(key),
+  setGlobalState: (key, value) => worldStateStore.setGlobalState(key, value),
+  deleteGlobalState: (key) => worldStateStore.deleteGlobalState(key),
+  getAllGlobalState: () => worldStateStore.getAllGlobalState(),
+  getItemStock: (itemId) => worldStateStore.getItemStock(itemId),
+  setItemStock: (itemId, stock, displayStates) =>
+    worldStateStore.setItemStock(itemId, stock, displayStates),
+  initItemStocks: (items) => worldStateStore.initItemStocks(items),
+};
+
+export const sqliteSnapshotStorage: SnapshotStorage = {
+  createSnapshot: (gameTime, description) =>
+    snapshotStore.createSnapshot(gameTime, description),
+  restoreSnapshot: (snapshotId) => snapshotStore.restoreSnapshot(snapshotId),
+  listSnapshots: () => snapshotStore.listSnapshots(),
+};
+
 /** server 用的默认存储实现（SQLite）。 */
 export function createDefaultStorage(): Storage {
   return {
     memories: sqliteMemoryStorage,
     characterStates: sqliteCharacterStateStorage,
     diaries: sqliteDiaryStorage,
+    worldState: sqliteWorldStateStorage,
+    snapshots: sqliteSnapshotStorage,
   };
 }

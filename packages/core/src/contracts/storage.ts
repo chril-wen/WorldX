@@ -5,7 +5,16 @@
  * server 侧的 `store/*` 作为 adapter 实现这些接口（见 server/src/core/storage-adapter.ts）。
  */
 
-import type { CharacterState, DiaryEntry, MemoryEntry, MemoryType } from "./index.js";
+import type {
+  CharacterState,
+  DiaryEntry,
+  GameTime,
+  LocationConfig,
+  MemoryEntry,
+  MemoryType,
+  ObjectRuntimeState,
+  WorldGlobalEntry,
+} from "./index.js";
 
 export interface MemoryQueryOptions {
   limit?: number;
@@ -48,6 +57,62 @@ export interface DiaryStorage {
   getDiaryEntries(charId: string, gameDay?: number): DiaryEntry[];
 }
 
+/** 物件运行时状态 + 世界全局状态 + 物品库存。 */
+export interface WorldStateStorage {
+  initWorldState(
+    locations: LocationConfig[],
+    opts?: { onlyMissingObjects?: boolean },
+  ): void;
+  getObjectState(objectId: string): ObjectRuntimeState;
+  getAllObjectStates(): ObjectRuntimeState[];
+  getObjectsByLocation(locationId: string): ObjectRuntimeState[];
+  updateObjectState(objectId: string, patch: Partial<ObjectRuntimeState>): void;
+  addUserToObject(objectId: string, characterId: string): void;
+  removeUserFromObject(objectId: string, characterId: string): void;
+
+  getGlobalState(key: string): string | null;
+  setGlobalState(key: string, value: string): void;
+  deleteGlobalState(key: string): void;
+  getAllGlobalState(): WorldGlobalEntry[];
+
+  getItemStock(itemId: string): ItemStock | null;
+  setItemStock(
+    itemId: string,
+    stock: number,
+    displayStates?: Record<string, number>,
+  ): void;
+  initItemStocks(
+    items: Array<{
+      id: string;
+      initialStock: number;
+      displayStates?: Record<string, number>;
+    }>,
+  ): void;
+}
+
+/** 物品库存快照。 */
+export interface ItemStock {
+  stock: number;
+  state: string;
+}
+
+/** 快照的元信息。 */
+export interface SnapshotMeta {
+  id: string;
+  gameDay: number;
+  gameTick: number;
+  description: string;
+  filePath: string;
+  createdAt: string;
+}
+
+/** 快照的读写能力。 */
+export interface SnapshotStorage {
+  createSnapshot(gameTime: GameTime, description?: string): string;
+  restoreSnapshot(snapshotId: string): void;
+  listSnapshots(): SnapshotMeta[];
+}
+
 /**
  * core 需要的全部存储能力。
  *
@@ -58,4 +123,6 @@ export interface Storage {
   memories: MemoryStorage;
   characterStates: CharacterStateStorage;
   diaries: DiaryStorage;
+  worldState: WorldStateStorage;
+  snapshots: SnapshotStorage;
 }

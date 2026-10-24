@@ -11,5 +11,21 @@ export type { LLMClient } from "./contracts/llm-client.js";
 export { updateEmotion, decayEmotion, getEmotionLabel } from "./engine/emotion-manager.js";
 export { decayNeeds } from "./engine/needs-manager.js";
 export { MemoryManager } from "./engine/memory-manager.js";
+export { WorldManager } from "./engine/world-manager.js";
+export type { TickAdvanceResult, MainAreaZone } from "./engine/world-manager.js";
+export { CharacterManager } from "./engine/character-manager.js";
 export { generateId } from "./utils/id-generator.js";
 export * from "./engine/time-helpers.js";
+export {
+  WeatherManager,
+  WEATHER_KINDS,
+  SEVERE_WEATHER,
+  isWeatherKind,
+  getWeatherLabel,
+  getWeatherInfoFor,
+  buildWeatherChangeEvent,
+  describeWeatherFor,
+  resolveExposure,
+  isBlockedByWeather,
+} from "./engine/weather-manager.js";
+export type { WeatherState, Exposure } from "./engine/weather-manager.js";
