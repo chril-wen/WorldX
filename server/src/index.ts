@@ -20,6 +20,7 @@ import expandRoutes from "./api/routes/expand.js";
 import sandboxChatRoutes from "./api/routes/sandbox-chat.js";
 import timelineRoutes from "./api/routes/timeline.js";
 import { resolveInitialWorldDir } from "./utils/world-directories.js";
+import { CLIENT_DIST_DIR } from "./utils/repo-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,7 +113,7 @@ async function main() {
   app.use("/assets/map", createWorldAssetHandler("map"));
   app.use("/assets/characters", createWorldAssetHandler("characters"));
 
-  const clientDistPath = path.resolve("../client/dist");
+  const clientDistPath = CLIENT_DIST_DIR;
   const clientIndexPath = path.join(clientDistPath, "index.html");
   if (fs.existsSync(clientDistPath) && fs.existsSync(clientIndexPath)) {
     app.use("/", express.static(clientDistPath));

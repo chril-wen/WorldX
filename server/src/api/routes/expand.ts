@@ -8,6 +8,7 @@ import type { CharacterProfile, LocationConfig } from "../../types/index.js";
 import { normalizeCharacterProfile } from "../../utils/config-loader.js";
 import { loadPromptTemplate } from "../../utils/config-loader.js";
 import { getWorldDir } from "../../utils/config-loader.js";
+import { REPO_ROOT } from "../../utils/repo-paths.js";
 import { z } from "zod";
 
 const router = Router();
@@ -93,10 +94,10 @@ function buildExpandPrompt(userPrompt: string): string {
 
   let template: string;
   try {
-    template = loadPromptTemplate("design-world");
+    template = loadPromptTemplate("world-expansion");
   } catch (err) {
     console.warn(
-      "[expand] design-world prompt template unavailable, using fallback:",
+      "[expand] world-expansion prompt template unavailable, using fallback:",
       err instanceof Error ? err.message : String(err),
     );
     template = "";
@@ -305,9 +306,10 @@ router.post("/map", async (req: Request, res: Response) => {
 
   send("start", { message: "Map expansion started" });
 
+  // 路径基于仓库根推导 —— 跟进程从哪启动无关。
+  // 以前用 `process.cwd()`，从仓库根启动 server 时会指向仓库外，扩图直接失效。
   const scriptPath = path.join(
-    process.cwd(),
-    "..",
+    REPO_ROOT,
     "orchestrator",
     "src",
     "expand-map.mjs",
@@ -317,7 +319,7 @@ router.post("/map", async (req: Request, res: Response) => {
     process.execPath,
     [scriptPath, worldDir, expandSide, mapPrompt.trim()],
     {
-      cwd: path.join(process.cwd(), "..", "orchestrator"),
+      cwd: path.join(REPO_ROOT, "orchestrator"),
       env: { ...process.env },
       stdio: ["ignore", "pipe", "pipe"],
     },

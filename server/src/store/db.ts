@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
+import { SERVER_DATA_DIR } from "../utils/repo-paths.js";
 
 let db: Database.Database | null = null;
 let currentDbPath: string | null = null;
@@ -124,7 +125,7 @@ CREATE TABLE IF NOT EXISTS content_candidates (
 
 export function initDatabase(dbPath?: string): Database.Database {
   const resolvedPath =
-    dbPath ?? process.env.DB_PATH ?? path.resolve("data/mist-town.db");
+    dbPath ?? process.env.DB_PATH ?? path.join(SERVER_DATA_DIR, "mist-town.db");
 
   const dir = path.dirname(resolvedPath);
   if (!fs.existsSync(dir)) {

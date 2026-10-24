@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { getDb, getDbPath, closeDb, initDatabase } from "./db.js";
 import type { GameTime } from "../types/index.js";
 import { generateId } from "../utils/id-generator.js";
+import { SERVER_DATA_DIR } from "../utils/repo-paths.js";
 
 export interface SnapshotMeta {
   id: string;
@@ -31,7 +32,7 @@ function getSnapshotsDir(): string {
   try {
     return path.join(path.dirname(getDbPath()), "snapshots");
   } catch {
-    return path.resolve("data/snapshots");
+    return path.join(SERVER_DATA_DIR, "snapshots");
   }
 }
 
@@ -132,7 +133,7 @@ export function createBranch(snapshotId: string, branchName: string): string {
     throw new Error(`Snapshot file not found: ${row.file_path}`);
   }
 
-  const branchDir = path.resolve("data/branches");
+  const branchDir = path.join(SERVER_DATA_DIR, "branches");
   ensureDir(branchDir);
 
   const branchPath = path.join(branchDir, `${branchName}.db`);

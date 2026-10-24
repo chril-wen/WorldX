@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  OUTPUT_WORLDS_DIR as REPO_OUTPUT_WORLDS_DIR,
+  LIBRARY_WORLDS_DIR as REPO_LIBRARY_WORLDS_DIR,
+} from "./repo-paths.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-export const GENERATED_WORLDS_DIR = path.resolve(__dirname, "../../../output/worlds");
-export const LIBRARY_WORLDS_DIR = path.resolve(__dirname, "../../../library/worlds");
+export const GENERATED_WORLDS_DIR = REPO_OUTPUT_WORLDS_DIR;
+export const LIBRARY_WORLDS_DIR = REPO_LIBRARY_WORLDS_DIR;
 
 export type WorldSource = "user" | "library";
 
