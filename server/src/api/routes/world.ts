@@ -8,6 +8,7 @@ import {
   isSimulationBusy,
 } from "../../services/simulation-activity.js";
 import { buildSceneRuntimeInfo, buildWorldTimeInfo } from "../../utils/time-helpers.js";
+import { getWeatherInfo } from "../../core/weather-manager.js";
 import * as worldStateStore from "../../store/world-state-store.js";
 import {
   GENERATED_WORLDS_DIR,
@@ -34,7 +35,10 @@ router.get("/time", (_req, res) => {
     res.status(503).json({ error: "No world loaded" });
     return;
   }
-  res.json(buildWorldTimeInfo(appContext.worldManager.getCurrentTime()));
+  res.json({
+    ...buildWorldTimeInfo(appContext.worldManager.getCurrentTime()),
+    weather: getWeatherInfo(),
+  });
 });
 
 router.get("/info", (_req, res) => {
@@ -52,6 +56,7 @@ router.get("/info", (_req, res) => {
     currentTimelineId: appContext.timelineManager.getCurrentTimelineId(),
     sceneConfig: wm.getSceneConfig(),
     sceneRuntime: buildSceneRuntimeInfo(wm.getSceneConfig()),
+    weather: getWeatherInfo(),
     worldActions: wm.getWorldActions(),
     mainAreaPoints: wm.getMainAreaPoints(),
     worldSize: wm.getWorldSize(),
@@ -177,6 +182,33 @@ router.get("/locations", (_req, res) => {
   res.json(appContext.worldManager.getAllLocations());
 });
 
+/**
+ * POST /api/world/reload — 从磁盘重新载入世界配置。
+ *
+ * 服务端在启动时把 world.json 读进内存。地图扩图由外部进程（orchestrator）
+ * 改写 world.json，磁盘变了但内存没变，客户端和服务端对世界的认知就分裂了。
+ * 走 /api/expand/map 的扩图会自动重载；但如果扩图是直接跑脚本做的
+ * （调试、批处理），就需要这个端点来同步。
+ */
+router.post("/reload", (_req, res) => {
+  if (!appContext.hasWorld) {
+    res.status(503).json({ error: "No world loaded" });
+    return;
+  }
+  try {
+    appContext.worldManager.reloadLocations();
+    const locations = appContext.worldManager.getAllLocations();
+    res.json({
+      ok: true,
+      locationCount: locations.length,
+      mainAreaPointCount: appContext.worldManager.getMainAreaPoints().length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Reload failed: ${message}` });
+  }
+});
+
 router.get("/locations/:id/state", (req, res) => {
   if (!appContext.hasWorld) {
     res.status(503).json({ error: "No world loaded" });
@@ -204,6 +236,30 @@ router.get("/locations/:id/state", (req, res) => {
       name: c.profile.name,
       action: c.state.currentAction,
     })),
+  });
+});
+
+// Read-only view of the model roles from .env. Never returns API keys, only whether one is set.
+const MODEL_ROLES = ["ORCHESTRATOR", "IMAGE_GEN", "VISION", "SIMULATION"] as const;
+
+router.get("/model-config", (_req, res) => {
+  res.json({
+    roles: MODEL_ROLES.map((role) => {
+      const baseUrl = process.env[`${role}_BASE_URL`] ?? "";
+      let host = "";
+      try {
+        host = baseUrl ? new URL(baseUrl).host : "";
+      } catch {
+        host = "(invalid URL)";
+      }
+      return {
+        role,
+        host,
+        model: process.env[`${role}_MODEL`] ?? "",
+        provider: role === "IMAGE_GEN" ? process.env.IMAGE_GEN_PROVIDER ?? "" : undefined,
+        hasApiKey: Boolean(process.env[`${role}_API_KEY`]),
+      };
+    }),
   });
 });
 

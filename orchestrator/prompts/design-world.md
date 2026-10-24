@@ -19,14 +19,41 @@
   - `endTime`（HH:MM，**仅 open 世界需要**）：每一幕结束的时间点。到达此时间后触发转场。例如夜市 `startTime: "19:00"`, `endTime: "02:00"` 表示每幕从晚7点持续到凌晨2点。**closed 世界不需要此字段**
   - `displayFormat`（`"modern"`、`"ancient_chinese"` 或 `"fantasy"`）
 - `sceneTransitionText`（对象，**仅 open 世界需要，closed 世界不要输出此字段**）：转场时展示的文案
-  - `endOfDayText`（字符串）：一幕结束时的描述（例如：“夜市的灯火逐渐阑珊，摊贩们开始收拾归家……”）
-  - `newDayText`（字符串）：新一幕开始时的描述（例如：“暮色四合，汴京城的夜市又热闹起来了……”）
+  - `endOfDayText`（字符串）：一幕结束时的描述（例如："夜市的灯火逐渐阑珊，摊贩们开始收拾归家……"）
+  - `newDayText`（字符串）：新一幕开始时的描述（例如："暮色四合，汴京城的夜市又热闹起来了……"）
 - `mapPlan`（对象）：
   - `buildingMode`（`"mostly_enterable"` | `"mostly_scenic"`）
   - `compositionNotes`（字符串）：一句话，概述地图俯视平面构图要点（如"左侧建筑群、中间街道、右侧广场"）
   - `worldFunctionSummary`（字符串）：一句话，概述整个场景的全局功能
   - `regionDesignNotes`（字符串）：一句话，概述各区域的平面位置关系与连通方式
-- `worldActions`（数组）：1–6 项。这些是全场景通用的动作，在任意位置均可使用。每个世界至少包含一个有意义的全局动作（closed场景必须有“睡觉”相关的动作）。每项包含：
+
+- `economics`（对象，**可选**）：世界中的物品经济体系。如果场景中有需要消耗/补充的物品（如茶馆卖茶、集市卖货）才填写此字段，否则省略
+  - `items`（数组）：0–6 项。每项包含：
+    - `id`（snake_case，英文）：物品唯一标识，如 `"tea_leaf"`
+    - `name`（语言与用户输入一致）：物品名称，如 `"茶叶"`
+    - `initialStock`（数字）：初始库存数量
+    - `consumptionPerUse`（数字）：每次使用/购买消耗的数量，默认为 1
+    - `restockAction`（字符串，语言与用户输入一致）：描述如何补货的动作，如 `"去后堂取茶叶"`
+    - `restockAmount`（数字）：补货一次增加的库存
+    - `displayStates`（对象）：以库存数量为 key，显示状态的阈值。格式：`{ "available": 3, "low": 1, "out": 0 }`——库存 ≥3 为 available，≥1 为 low，0 为 out。可不填，系统自动计算
+  - `trackedBy`（字符串）：追踪此物品库存的物件 ID，如茶馆里对应 `"tea_counter"`
+
+- `relationships`（数组，**可选**）：角色之间的初始关系状态。如果所有角色之间都是陌生人/泛泛之交，可以省略此项
+  - 每项包含：
+    - `charA`（字符串）：角色 A 的 name
+    - `charB`（字符串）：角色 B 的 name
+    - `affinity`（数字，范围 0–5，默认为 2）：亲近度。0=完全陌生，1=点头之交，2=熟人，3=老友，4=至交，5=亲人/爱人
+    - `tension`（数字，范围 0–5，默认为 0）：紧张度/矛盾。0=无矛盾，1=小摩擦，2=有隔阂，3=敌意，4=冲突中，5=势不两立
+    - `note`（字符串，语言与用户输入一致，可选）：关系背景描述，如 "两人是多年的老邻居，但也因为一件往事心存芥蒂"
+
+- `weather`（对象，**可选**）：气候配置。如果不填，世界使用默认天气规则
+  - `preset`（字符串）：气候预设。选项：`"temperate"`（温和，晴/多云/小雨轮换，默认）、`"southern_water_town"`（江南水乡，有晨雾）、`"desert"`（沙漠，多风沙和高温）、`"tropical"`（热带，多骤雨雷暴）、`"tundra"`（寒带，多雪）
+  - `indoorDefault`（布尔，可选）：world.json 中所有地点的默认室内标记。`true`=默认室内（室内角色不受天气影响），`false`=默认室外。场景中明显有室内外之分时（如茶馆内部 vs 河边街道）才填此项，否则省略让运行时自行判断
+
+- `hearsay`（对象，**可选**）：传闻传播规则开关
+  - `enabled`（布尔，默认为 `false`）：是否启用对话内容传闻扩散。设为 `true` 时，对话中有趣的内容会在角色间传播，影响后续感知
+
+- `worldActions`（数组）：1–6 项。这些是全场景通用的动作，在任意位置均可使用。每个世界至少包含一个有意义的全局动作（closed场景必须有"睡觉"相关的动作）。每项包含：
   - `id`（snake_case，英文）
   - `name`（语言与用户输入一致）
   - `description`（语言与用户输入一致）
@@ -43,6 +70,7 @@
   - `visualDescription`（≤15 字，描述该区域**从正上方俯视**时的外观特征，不要描述立面/高度/3D 特征）
   - `expectedObjects`（字符串数组）
   - `interactions`（对象数组，包含 `id`、`name`、`description`、`duration`、`effects`，以及可选的 `requiresAnchor`）
+  - `indoor`（布尔值，可选）：此区域是否有屋顶遮蔽。如果建筑内部/有顶棚/室内（如茶馆内堂、店铺内部），设为 `true`；户外广场、街道设为 `false` 或省略。如果不填，运行时默认推断。
 - `interactiveElements`（数组）：0–8 项（与 `regions` 合计不超过 8 项）。这些是 main_area 中的可交互元素——如摊位、喷泉、贩售机、神龛等，角色走到附近进行交互，但不进入内部。不要将可交互元素放在功能区内。每项包含：
   - `id`（snake_case，英文）
   - `name`（语言与用户输入一致）
@@ -50,7 +78,7 @@
   - `visualDescription`（≤15 字，描述该元素**从正上方俯视**时的外观特征）
   - `placementHint`（2–4 个词的位置描述）
   - `interactions`（对象数组，包含 `id`、`name`、`description`、`duration`、`effects`，以及可选的 `requiresAnchor`）
-- `characters`（数组）：1–8 项。每项包含：`name`、`role`、`personality`、`appearance`（语言与用户输入一致，描述视觉外观：身份/职业关键词 + 发型、服装、配饰、颜色。**必须包含用户原文中的身份关键词**，如用户说"捕快"则 appearance 中必须出现"捕快"）、`appearanceHint`（一句话，供**其他角色看到 ta 时**使用的外貌弱提示；只写旁观者一眼能注意到的外观印象，不要直接泄露身份真相、现代概念、剧情设定或标签判断。例如不要写"现代网红"，应写"衣着样式和镇上人格格不入，打扮很新奇"）、`motivation`、`socialStyle`、`initialMemories`（字符串数组）。可选填 `anchor`（见下方"角色锚定"规则）。当且仅当用户明确提到了知名 IP 角色时，才可选填 `iconicCues` 和 `canonicalRefs`（详见下方"角色鲜活度"规则）。
+- `characters`（数组）：1–8 项。每项包含：`name`、`role`、`personality`、`appearance`（语言与用户输入一致，描述视觉外观：身份/职业关键词 + 发型、服装、配饰、颜色。**必须包含用户原文中的身份关键词**，如用户说"捕快"则 appearance 中必须出现"捕快"）、`appearanceHint`（一句话，供**其他角色看到 ta 时**使用的外貌弱提示；只写旁观者一眼能注意到的外观印象，不要直接泄露身份真相、现代概念、剧情设定或标签判断。例如不要写"现代网红"，应写"衣着样式和镇上人格格不入，打扮很新奇"）、`motivation`、`socialStyle`、`initialMemories`（字符串数组）。**如果 `relationships` 字段中有涉及此角色的记录，`initialMemories` 中应包含关系背景描述**。可选填 `anchor`（见下方"角色锚定"规则）。当且仅当用户明确提到了知名 IP 角色时，才可选填 `iconicCues` 和 `canonicalRefs`（详见下方"角色鲜活度"规则）。
   - `anchor`（可选对象）：`{ "type": "region" | "element", "targetId": "对应的 region 或 interactiveElement 的 id" }`。省略则为自由行走角色
   - `iconicCues`（可选对象）：`speechQuirks`（字符串数组——结构性说话习惯，不是口头禅；如"总以试探性反问回应别人，以此让对方先亮出底牌"）、`catchphrases`（数组，最多 2 条标志性台词）、`behavioralTics`（字符串数组——可反复出现的小动作/行为习惯）
   - `canonicalRefs`（可选对象）：`source`（原作 IP 名称）、`keyRelationships`（字符串数组——原作中对该角色最重要的人及关系）、`signatureMoments`（1–2 条字符串——定义该角色的关键时刻，作为其"心结"或执念，用作触发器而非表演素材）
@@ -178,9 +206,9 @@
 - 最多 8 个角色，最少 1 个
 - `regions` + `interactiveElements` 合计最多 8 个
 - **硬性上限**：角色不能超过 8 个；`regions` 与 `interactiveElements` 合计不能超过 8 个
-- 如果用户的**明确要求**本身已经超过上述硬性上限，不要偷偷删减、合并或弱化需求来“凑合生成”；此时必须返回 `feasible: false`
+- 如果用户的**明确要求**本身已经超过上述硬性上限，不要偷偷删减、合并或弱化需求来"凑合生成"；此时必须返回 `feasible: false`
 - 当 `feasible: false` 时：
-  - `infeasibleReason` 必须明确指出超限项（如“角色数量超出上限”“功能区与可交互元素总数超出上限”）
+  - `infeasibleReason` 必须明确指出超限项（如"角色数量超出上限""功能区与可交互元素总数超出上限"）
   - `adjustmentSuggestions` 给出 1–3 条可操作建议
   - 其余世界设计字段可以留空、置为默认值或最小占位，但仍需保持合法 JSON
 - 每个世界至少包含 1 个有意义的 `worldAction`

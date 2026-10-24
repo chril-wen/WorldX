@@ -175,6 +175,17 @@ export function compareGameTime(a: GameTime, b: GameTime): number {
   return a.tick - b.tick;
 }
 
+/** Hour of day (0-23) at the given scene tick. */
+export function getSceneHour(
+  tick: number,
+  config?: SceneTimeConfig,
+): number {
+  const c = config || currentSceneConfig;
+  const [startH, startM] = getEffectiveStartTime(c).split(":").map(Number);
+  const totalMinutes = startH * 60 + startM + tick * c.tickDurationMinutes;
+  return Math.floor(totalMinutes / 60) % 24;
+}
+
 export function getTimePeriodLabel(
   tick: number,
   config?: SceneTimeConfig,

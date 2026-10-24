@@ -15,6 +15,7 @@ import type { PromptBuilder } from "../llm/prompt-builder.js";
 import { DecisionMaker } from "./decision-maker.js";
 import { DialogueGenerator } from "./dialogue-generator.js";
 import { buildPerception } from "./perceiver.js";
+import { advanceWeather } from "../core/weather-manager.js";
 import { buildActionMenu } from "./action-menu-builder.js";
 import { executeAction, completeAction } from "./action-executor.js";
 import {
@@ -86,6 +87,12 @@ export class SimulationEngine {
       events.push(...await this.runCycleTransition(previousTime));
       return this.finalizeTickEvents(events);
     }
+
+    const weatherEvent = advanceWeather(
+      gameTime,
+      this.worldManager.getSceneConfig().tickDurationMinutes,
+    );
+    if (weatherEvent) events.push(weatherEvent);
 
     const allChars = shuffle(this.characterManager.getAllProfiles());
 

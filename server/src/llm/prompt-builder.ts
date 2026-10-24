@@ -165,6 +165,11 @@ export class PromptBuilder {
     worldSocialContext?: string;
     knownCharacters?: string;
     knownLocations?: string;
+    // Rich world: relationship values (0-5)
+    affinityA?: number;
+    tensionA?: number;
+    affinityB?: number;
+    tensionB?: number;
   }): Message[] {
     const { participants, location, initiatorId, gameTime } = params;
 
@@ -188,6 +193,9 @@ export class PromptBuilder {
       memoriesAaboutB: a.memoriesAboutOther || "（无）",
       hearsayA: params.hearsayA || "（无）",
       motivation: params.initiatorMotivation,
+      // Rich world: relationship tone hints
+      relToneA: formatRelTone(params.affinityA ?? 2, params.tensionA ?? 0),
+      relToneB: formatRelTone(params.affinityB ?? 2, params.tensionB ?? 0),
 
       nameB: b.profile.name,
       idB: b.profile.id,
@@ -392,6 +400,10 @@ function formatPerception(p: Perception): string {
   const zoneSuffix = p.myZone ? `，你在${zoneLabel(p.myZone)}` : "";
   lines.push(`位置：${p.currentLocation}（${p.locationDescription}）${zoneSuffix}`);
 
+  if (p.weather) {
+    lines.push(p.weather);
+  }
+
   if (p.objectsHere.length > 0) {
     lines.push("可见物件：");
     for (const obj of p.objectsHere) {
@@ -455,6 +467,18 @@ function formatWorldSocialContext(context?: string): string {
 
 function formatIconicCuesBlock(profile: CharacterProfile): string {
   return buildIconicCuesText(profile) || "（无）";
+}
+
+/** Turn affinity/tension (0-5) into a brief tone hint for the dialogue model. */
+function formatRelTone(affinity: number, tension: number): string {
+  if (tension >= 3) return "关系紧张/有敌意";
+  if (tension === 2) return "关系有些隔阂";
+  if (tension === 1) return "关系有小摩擦";
+  if (affinity >= 4) return "关系亲近/信任";
+  if (affinity === 3) return "关系友好/熟悉";
+  if (affinity === 1) return "关系生疏/泛泛之交";
+  if (affinity === 0) return "关系冷淡/几乎不认识";
+  return "普通熟人关系";
 }
 
 function formatIconicCuesBlockForPair(

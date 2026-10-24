@@ -6,7 +6,7 @@ import type {
   DiaryEntry,
 } from "../types/index.js";
 import type { WorldManager } from "./world-manager.js";
-import { loadCharacterProfiles } from "../utils/config-loader.js";
+import { loadCharacterProfiles, writeCharacterProfile, invalidateCharacterProfileCache } from "../utils/config-loader.js";
 import { generateId } from "../utils/id-generator.js";
 import * as charStateStore from "../store/character-state-store.js";
 import { MemoryManager } from "./memory-manager.js";
@@ -105,6 +105,84 @@ export class CharacterManager {
 
   getAllProfiles(): CharacterProfile[] {
     return Array.from(this.profiles.values());
+  }
+
+  /**
+   * Spawn a new character into the running world.
+   * Persists to disk so the character survives world reloads.
+   */
+  spawnCharacter(profile: CharacterProfile): void {
+    // 1. Assign an ID if missing
+    if (!profile.id) {
+      profile.id = `char_${generateId().slice(0, 8)}`;
+    }
+
+    // 2. Collect already-occupied point IDs BEFORE registering new profile
+    const occupiedPointIds = new Set<string>();
+    for (const p of this.profiles.values()) {
+      const s = charStateStore.getCharacterState(p.id);
+      if (s.mainAreaPointId) occupiedPointIds.add(s.mainAreaPointId);
+    }
+
+    // 3. Persist to disk
+    writeCharacterProfile(profile);
+
+    // 4. Register in-memory
+    this.profiles.set(profile.id, profile);
+
+    // 5. Create initial state
+    const seedSalt = `spawn:${Date.now().toString(36)}`;
+    const state = buildInitialCharacterState(profile, this.worldManager, occupiedPointIds, seedSalt);
+    charStateStore.initCharacterState(state);
+
+    // 6. Add initial memories
+    for (const initMem of profile.initialMemories) {
+      this.memoryManager.addMemory({
+        characterId: profile.id,
+        type: initMem.type,
+        content: initMem.content,
+        gameTime: this.worldManager.getCurrentTime(),
+        importance: initMem.importance ?? 5,
+        emotionalValence: initMem.emotionalValence ?? 0,
+        emotionalIntensity: initMem.emotionalIntensity ?? 2,
+        relatedCharacters: initMem.relatedCharacters,
+        relatedLocation: initMem.relatedLocation,
+        relatedObjects: initMem.relatedObjects ?? [],
+        tags: initMem.tags ?? [],
+      });
+    }
+
+    // 7. Backstory memory
+    if (profile.backstory) {
+      this.memoryManager.addMemory({
+        characterId: profile.id,
+        type: "experience",
+        content: profile.backstory,
+        gameTime: { day: 1, tick: 0 },
+        importance: 8,
+        emotionalValence: 0,
+        emotionalIntensity: 3,
+        relatedCharacters: [],
+        relatedLocation: profile.startPosition,
+        relatedObjects: [],
+        tags: ["backstory"],
+      });
+    }
+  }
+
+  /**
+   * Clear all character positions so the next tick's movement decision
+   * will reassign them to valid walkable points on the map.
+   */
+  reassignAllToMainArea(): void {
+    for (const charId of this.profiles.keys()) {
+      charStateStore.updateCharacterState(charId, {
+        mainAreaPointId: null,
+        currentAction: null,
+        location: "main_area",
+      });
+    }
+    console.log(`[CharacterManager] Reassigned ${this.profiles.size} characters to main_area`);
   }
 
   /** Editable subset of CharacterProfile fields. */
@@ -288,3 +366,4 @@ function buildInitialCharacterState(
 function clampStat(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
+

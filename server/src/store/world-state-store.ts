@@ -1,7 +1,20 @@
 import { getDb } from "./db.js";
 import type { LocationConfig, ObjectRuntimeState, WorldGlobalEntry } from "../types/index.js";
 
-export function initWorldState(locations: LocationConfig[]): void {
+/**
+ * 初始化世界状态。
+ *
+ * @param locations - 世界里的地点及其物件
+ * @param opts.onlyMissingObjects - 只补齐缺失的物件状态行，不写全局状态。
+ *   用于「热加载」场景：世界已经被扩图改写过，此时需要给新区域的物件补上
+ *   状态行，但绝不能动 current_day / weather 等运行时状态——那些正被
+ *   模拟引擎使用。全局状态用 INSERT OR IGNORE 虽然也不会覆盖已有值，
+ *   但依赖这个隐式行为太脆弱，显式分开更清楚。
+ */
+export function initWorldState(
+  locations: LocationConfig[],
+  opts: { onlyMissingObjects?: boolean } = {},
+): void {
   const db = getDb();
 
   const insertObj = db.prepare(
@@ -19,6 +32,7 @@ export function initWorldState(locations: LocationConfig[]): void {
         insertObj.run(obj.id, obj.locationId, obj.defaultState, "", "[]");
       }
     }
+    if (opts.onlyMissingObjects) return;
     insertGlobal.run("current_day", "1");
     insertGlobal.run("current_tick", "0");
     insertGlobal.run("power", "on");
@@ -133,4 +147,42 @@ export function getAllGlobalState(): WorldGlobalEntry[] {
   return (getDb().prepare("SELECT key, value FROM world_global_state").all() as any[]).map(
     (r) => ({ key: r.key, value: r.value }),
   );
+}
+
+// ─── Item stock management ────────────────────────────────────────────────────
+// Economics items are stored as global state entries keyed "item:<id>"
+// e.g. item:tea_leaf → JSON { stock: 10 }
+
+export interface ItemStock {
+  stock: number;
+  state: string; // "available" | "low" | "out"
+}
+
+export function getItemStock(itemId: string): ItemStock | null {
+  const raw = getGlobalState(`item:${itemId}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ItemStock;
+  } catch {
+    return null;
+  }
+}
+
+export function setItemStock(itemId: string, stock: number, displayStates?: Record<string, number>): void {
+  let state = "available";
+  if (displayStates) {
+    const thresholds = Object.entries(displayStates)
+      .map(([s, threshold]) => ({ state: s, threshold: Number(threshold) }))
+      .sort((a, b) => b.threshold - a.threshold);
+    for (const { state: s, threshold } of thresholds) {
+      if (stock >= threshold) { state = s; break; }
+    }
+  }
+  setGlobalState(`item:${itemId}`, JSON.stringify({ stock: Math.max(0, stock), state }));
+}
+
+export function initItemStocks(items: Array<{ id: string; initialStock: number; displayStates?: Record<string, number> }>): void {
+  for (const item of items) {
+    setItemStock(item.id, item.initialStock, item.displayStates);
+  }
 }

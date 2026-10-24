@@ -38,7 +38,14 @@ export function isUnsupportedJsonModeError(error) {
   );
 }
 
+// Strip think/thinking XML tags that some models emit before the JSON response
+export function stripThinkTags(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
+}
+
 export function stripMarkdownFences(text) {
+  if (typeof text !== "string") return text;
   return text
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
@@ -137,8 +144,10 @@ export function cleanupTrailingCommas(text) {
 }
 
 export function parsePossiblyMalformedJSON(raw) {
-  const cleaned = stripMarkdownFences(raw);
-  const extracted = extractJSONObject(cleaned) || cleaned;
+  // Strip think tags first (they may contain braces that confuse the JSON parser)
+  const stripped = stripThinkTags(raw);
+  const cleaned = stripMarkdownFences(stripped);
+  const extracted = extractJSONObject(cleaned) || stripped;
   const candidates = [
     extracted,
     cleanupTrailingCommas(extracted),

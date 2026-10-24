@@ -7,10 +7,11 @@ import type { WorldTimeInfo, TimelineMeta } from "../../types/api";
 import { apiClient } from "../services/api-client";
 import type { WorldInfo, GeneratedWorldSummary } from "../services/api-client";
 import { GodPanel } from "./GodPanel";
+import { AdvancedPanel } from "./AdvancedPanel";
 import { SandboxChatPanel } from "./SandboxChatPanel";
 import { TimelineManagerModal } from "./TimelineManagerModal";
 import { LanguageToggle } from "../components/LanguageToggle";
-import { translatePeriod } from "../utils/time-i18n";
+import { translatePeriod, weatherIcon, translateWeather } from "../utils/time-i18n";
 import { sortLibraryWorldsForLocale } from "../utils/library-world-sort";
 
 type ViewMode = "run" | "replay";
@@ -65,6 +66,7 @@ export function TopBar({
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [isSwitchingWorld, setIsSwitchingWorld] = useState(false);
   const [godPanelOpen, setGodPanelOpen] = useState(false);
+  const [advancedPanelOpen, setAdvancedPanelOpen] = useState(false);
   const [sandboxChatOpen, setSandboxChatOpen] = useState(false);
   const [showPauseToast, setShowPauseToast] = useState(false);
   const [isChangingTickGranularity, setIsChangingTickGranularity] = useState(false);
@@ -210,6 +212,8 @@ export function TopBar({
 
   const worldName = worldInfo?.worldName || "WorldX";
   const period = gameTime.period ? translatePeriod(gameTime.period) : "";
+  const weatherLabel = gameTime.weather ? translateWeather(gameTime.weather.kind) : "";
+  const weatherSym = gameTime.weather ? weatherIcon(gameTime.weather.kind) : "";
   const timeLabel = gameTime.timeString
     ? (period
       ? t("topbar.dayTimePeriod", { day: gameTime.day, time: gameTime.timeString, period })
@@ -326,6 +330,11 @@ export function TopBar({
           <span style={{ fontSize: 11, opacity: 0.78, whiteSpace: "nowrap" }}>{statusLabel}</span>
           <span style={{ opacity: 0.45 }}>|</span>
           <span style={{ fontSize: 12, color: "#dfe6e9", whiteSpace: "nowrap" }}>{timeLabel}</span>
+          {weatherSym && (
+            <span title={weatherLabel} style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+              {" "}{weatherSym}{weatherLabel}
+            </span>
+          )}
         </div>
 
         {/* Right: mode toggle + play/pause */}
@@ -471,6 +480,14 @@ export function TopBar({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button onClick={() => navigate("/timeline")} style={chipBtnStyle(false)}>{t("topbar.eventLog")}</button>
           <button
+            onClick={() => { setAdvancedPanelOpen(true); pauseWorldIfNeeded(); }}
+            disabled={inReplayMode}
+            style={{ ...chipBtnStyle(advancedPanelOpen), opacity: inReplayMode ? 0.4 : 1, cursor: inReplayMode ? "not-allowed" : "pointer" }}
+            title={t("topbar.advancedTitle")}
+          >
+            {t("topbar.advanced")}
+          </button>
+          <button
             onClick={() => setGodPanelOpen(true)}
             disabled={inReplayMode}
             style={{ ...chipBtnStyle(godPanelOpen), opacity: inReplayMode ? 0.4 : 1, cursor: inReplayMode ? "not-allowed" : "pointer" }}
@@ -553,6 +570,17 @@ export function TopBar({
 
       {godPanelOpen && typeof document !== "undefined"
         ? createPortal(<GodPanel onClose={() => setGodPanelOpen(false)} />, document.body)
+        : null}
+      {advancedPanelOpen && typeof document !== "undefined"
+        ? createPortal(
+            <AdvancedPanel
+              onClose={() => setAdvancedPanelOpen(false)}
+              worldId={worldInfo?.currentWorldId ?? null}
+              timelineId={worldInfo?.currentTimelineId ?? null}
+              simBusy={isBusy}
+            />,
+            document.body,
+          )
         : null}
       {sandboxChatOpen && typeof document !== "undefined"
         ? createPortal(<SandboxChatPanel onClose={() => setSandboxChatOpen(false)} />, document.body)

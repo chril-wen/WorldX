@@ -67,6 +67,35 @@ export function loadCharacterProfiles(): CharacterProfile[] {
   throw new Error("Characters directory not found");
 }
 
+function findWritableCharactersDir(): string {
+  const candidates = [
+    worldDir ? path.join(worldDir, "config", "characters") : null,
+    worldDir ? path.join(worldDir, "characters") : null,
+  ].filter(Boolean) as string[];
+
+  for (const dir of candidates) {
+    if (fs.existsSync(dir!)) return dir!;
+  }
+  const fallback = path.join(worldDir || CONFIGS_DIR, "config", "characters");
+  fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+}
+
+/**
+ * Persist a new or updated character profile to disk.
+ * Writes to config/characters/<id>.json so it survives world reloads.
+ */
+export function writeCharacterProfile(profile: CharacterProfile): void {
+  const dir = findWritableCharactersDir();
+  const filePath = path.join(dir, `${profile.id}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(profile, null, 2), "utf-8");
+}
+
+/** Invalidate character profile cache so newly added characters are picked up. */
+export function invalidateCharacterProfileCache(): void {
+  cachedCharacterProfiles = null;
+}
+
 export function loadSceneConfig(): SceneConfig {
   if (cachedSceneConfig) return cachedSceneConfig;
 
@@ -119,7 +148,7 @@ export function reloadConfigs(): void {
   cachedPromptTemplates.clear();
 }
 
-function normalizeCharacterProfile(raw: any): CharacterProfile | null {
+export function normalizeCharacterProfile(raw: any): CharacterProfile | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || !raw.id || !raw.name) {
     return null;
   }

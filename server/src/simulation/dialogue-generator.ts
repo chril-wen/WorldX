@@ -44,6 +44,11 @@ export class DialogueGenerator {
         worldSocialContext: this.worldManager.getWorldSocialContext(),
         knownCharacters: this.formatKnownCharacters(),
         knownLocations: this.formatKnownLocations(),
+        // Rich world: relationship values
+        affinityA: context.affinityA,
+        tensionA: context.tensionA,
+        affinityB: context.affinityB,
+        tensionB: context.tensionB,
       });
 
       const result = await this.llmClient.call({
@@ -189,14 +194,18 @@ export class DialogueGenerator {
     const location = this.worldManager.getLocation(stateA.location);
     const locationName = location?.name ?? stateA.location;
 
-    const hearsayA = this.characterManager.memoryManager
-      .getRecentHearsay(initiatorId, gameTime.day)
-      .map((m) => `- ${m.content}`)
-      .join("\n");
-    const hearsayB = this.characterManager.memoryManager
-      .getRecentHearsay(responderId, gameTime.day)
-      .map((m) => `- ${m.content}`)
-      .join("\n");
+    const hearsayA = this.worldManager.isHearsayEnabled()
+        ? this.characterManager.memoryManager
+            .getRecentHearsay(initiatorId, gameTime.day)
+            .map((m) => `- ${m.content}`)
+            .join("\n")
+        : "";
+    const hearsayB = this.worldManager.isHearsayEnabled()
+        ? this.characterManager.memoryManager
+            .getRecentHearsay(responderId, gameTime.day)
+            .map((m) => `- ${m.content}`)
+            .join("\n")
+        : "";
 
     return {
       initiatorId,
@@ -208,6 +217,11 @@ export class DialogueGenerator {
       locationName,
       hearsayA,
       hearsayB,
+      // Rich world: relationship values
+      affinityA: profileA.affinity ?? 2,
+      tensionA: profileA.tension ?? 0,
+      affinityB: profileB.affinity ?? 2,
+      tensionB: profileB.tension ?? 0,
       participants: [
         {
           profile: profileA,

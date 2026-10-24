@@ -32,8 +32,15 @@ function logModelCall(step, model, promptSummary) {
   console.log(`[${step}] ${model} request:\n${promptSummary.slice(0, 2000)}${promptSummary.length > 2000 ? "…" : ""}`);
 }
 
+function stripThinkAndFormat(raw) {
+  if (typeof raw !== "string") return raw;
+  // Remove think tags and surrounding newlines/whitespace
+  return raw.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
+}
+
 function logModelResponse(step, model, text) {
-  console.log(`[${step}] ${model} response (${text.length} chars)`);
+  const cleaned = stripThinkAndFormat(text);
+  console.log(`[${step}] ${model} response (${cleaned.length} chars)`);
 }
 
 function logError(step, error) {

@@ -116,6 +116,36 @@ export interface CreateJobSnapshot {
   error: string | null;
 }
 
+export interface ModelConfigResponse {
+  roles: {
+    role: string;
+    host: string;
+    model: string;
+    provider?: string;
+    hasApiKey: boolean;
+  }[];
+}
+
+export interface GlobalStateEntry {
+  key: string;
+  value: string;
+}
+
+export interface LocationState {
+  location: { id: string; name: string; description?: string };
+  objects: {
+    objectId: string;
+    state: string;
+    stateDescription?: string;
+    currentUsers: string[];
+  }[];
+  characters: {
+    id: string;
+    name: string;
+    action: string | null;
+  }[];
+}
+
 export class JobConflictError extends Error {
   activeJobId: string;
   constructor(message: string, activeJobId: string) {
@@ -140,6 +170,18 @@ export const apiClient = {
 
   getLocations(): Promise<LocationInfo[]> {
     return fetchJSON("/world/locations");
+  },
+
+  getLocationState(locationId: string): Promise<LocationState> {
+    return fetchJSON(`/world/locations/${encodeURIComponent(locationId)}/state`);
+  },
+
+  getGlobalState(): Promise<GlobalStateEntry[]> {
+    return fetchJSON("/world/global-state");
+  },
+
+  getModelConfig(): Promise<ModelConfigResponse> {
+    return fetchJSON("/world/model-config");
   },
 
   getCharacters(): Promise<CharacterInfo[]> {
@@ -207,6 +249,28 @@ export const apiClient = {
     return postJSON("/simulation/day");
   },
 
+  simulateDays(count: number): Promise<{
+    ok: boolean;
+    paused?: boolean;
+    gameTime: WorldTimeInfo;
+    eventCount: number;
+    ticksCompleted?: number;
+  }> {
+    return postJSON("/simulation/days", { count });
+  },
+
+  pauseSimulation(): Promise<{ ok: boolean; activeSimulationTicks?: number }> {
+    return postJSON("/simulation/pause");
+  },
+
+  getSimulationStatus(): Promise<{
+    status: "idle" | "running" | "paused";
+    gameTime: WorldTimeInfo;
+    progress: { current: number; total: number } | null;
+  }> {
+    return fetchJSON("/simulation/status");
+  },
+
   switchWorld(worldId: string): Promise<{
     ok: boolean;
     currentWorldId: string;
@@ -248,6 +312,68 @@ export const apiClient = {
     emotionalIntensity?: number;
   }): Promise<{ ok: boolean; memory: MemoryEntry }> {
     return postJSON("/god/whisper", params);
+  },
+
+  expandAddCharacter(params: {
+    characterPrompt?: string;
+    characterDesign?: unknown;
+  }): Promise<{ ok: boolean; character: { id: string; name: string; role: string } }> {
+    return postJSON("/expand/character", params);
+  },
+
+  expandAddRegion(params: {
+    regionPrompt?: string;
+    regionDesign?: unknown;
+  }): Promise<{ ok: boolean; region: { id: string; name: string } }> {
+    return postJSON("/expand/region", params);
+  },
+
+  expandAddMap(
+    params: { mapPrompt: string; side?: "right" | "left" | "top" | "bottom" | "auto" },
+    onProgress?: (stage: string) => void,
+  ): Promise<{ ok: boolean; message: string; result?: unknown }> {
+    const base = API_BASE;
+    return fetch(`${base}/expand/map`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    }).then(async (response) => {
+      if (!response.ok || !response.body) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: { ok: boolean; message: string; result?: unknown } | null = null;
+      let failure: string | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+        for (const chunk of chunks) {
+          const eventLine = chunk.split("\n").find((l) => l.startsWith("event: "));
+          const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
+          if (!eventLine || !dataLine) continue;
+          const event = eventLine.slice(7).trim();
+          const payload = JSON.parse(dataLine.slice(6));
+          if (event === "progress") {
+            onProgress?.(payload.stage);
+          } else if (event === "error") {
+            failure = payload.error;
+          } else if (event === "done") {
+            result = payload;
+          }
+        }
+      }
+
+      if (failure) throw new Error(failure);
+      if (!result) throw new Error("Map expansion ended without a result");
+      return result;
+    });
   },
 
   sandboxChatStart(params: {

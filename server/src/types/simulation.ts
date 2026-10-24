@@ -89,6 +89,8 @@ export interface Perception {
   currentLocation: string;
   locationDescription: string;
   myZone?: string;
+  /** One line describing the current weather as this character experiences it. */
+  weather?: string;
   objectsHere: {
     id: string;
     name: string;

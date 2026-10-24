@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { apiClient } from "../services/api-client";
 import type { CharacterInfo } from "../../types/api";
 
-type TabKey = "broadcast" | "whisper";
+type TabKey = "broadcast" | "whisper" | "expand";
 
 const PRESET_CARD_KEYS = [
   { emoji: "☔", labelKey: "god.presetRain", contentKey: "god.presetRainContent", tone: "tense" },
@@ -31,6 +31,14 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
   const [whisperContent, setWhisperContent] = useState("");
   const [whisperImportance, setWhisperImportance] = useState(8);
   const [whisperType, setWhisperType] = useState<"observation" | "dream" | "reflection" | "experience">("observation");
+
+  const [expandTab, setExpandTab] = useState<"character" | "region" | "map">("character");
+  const [expandPrompt, setExpandPrompt] = useState("");
+  const [expandStage, setExpandStage] = useState("");
+  // 扩图方向：auto = 让 LLM 根据地图内容自己选
+  const [expandSide, setExpandSide] = useState<"auto" | "right" | "left" | "top" | "bottom">(
+    "auto",
+  );
 
   useEffect(() => {
     apiClient
@@ -78,6 +86,48 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const doExpand = async () => {
+    if (busy) return;
+    const trimmed = expandPrompt.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    try {
+      if (expandTab === "character") {
+        const resp = await apiClient.expandAddCharacter({ characterPrompt: trimmed });
+        showFlash("ok", t("expand.successCharacter", { name: resp.character.name }));
+      } else {
+        const resp = await apiClient.expandAddRegion({ regionPrompt: trimmed });
+        showFlash("ok", t("expand.successRegion", { name: resp.region.name }));
+      }
+      setExpandPrompt("");
+    } catch (err) {
+      showFlash("err", t("expand.failedPrefix", { error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doExpandMap = async () => {
+    if (busy) return;
+    const trimmed = expandPrompt.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    setExpandStage("");
+    try {
+      await apiClient.expandAddMap({ mapPrompt: trimmed, side: expandSide }, (stage) => setExpandStage(stage));
+      showFlash("ok", t("expand.successMap"));
+      setExpandPrompt("");
+      // 地图底图与 TMJ 都是启动时加载进 Phaser 的，
+      // 不刷新页面的话新区域不会出现在画面上。
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      showFlash("err", t("expand.failedPrefix", { error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setBusy(false);
+      setExpandStage("");
+    }
+  };
+
   const doWhisper = async () => {
     if (busy) return;
     if (!whisperCharId) {
@@ -122,13 +172,13 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div style={tabsStyle}>
-          {(["broadcast", "whisper"] as TabKey[]).map((key) => (
+          {(["broadcast", "whisper", "expand"] as TabKey[]).map((key) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               style={tabBtnStyle(tab === key)}
             >
-              {key === "broadcast" ? t("god.tabBroadcast") : t("god.tabWhisper")}
+              {key === "broadcast" ? t("god.tabBroadcast") : key === "whisper" ? t("god.tabWhisper") : t("expand.tabExpand")}
             </button>
           ))}
         </div>
@@ -249,6 +299,134 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
               <button onClick={doWhisper} disabled={busy} style={primaryBtnStyle(busy)}>
                 {busy ? t("god.implanting") : t("god.implant")}
               </button>
+            </div>
+          )}
+
+          {tab === "expand" && (
+            <div style={sectionStyle}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <button
+                  onClick={() => setExpandTab("character")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 0",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 8,
+                    background: expandTab === "character" ? "rgba(255,255,255,0.1)" : "transparent",
+                    color: "#e0e0e0",
+                    cursor: "pointer",
+                    fontWeight: expandTab === "character" ? 700 : 400,
+                    fontSize: 13,
+                  }}
+                >
+                  {t("expand.tabCharacter")}
+                </button>
+                <button
+                  onClick={() => setExpandTab("region")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 0",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 8,
+                    background: expandTab === "region" ? "rgba(255,255,255,0.1)" : "transparent",
+                    color: "#e0e0e0",
+                    cursor: "pointer",
+                    fontWeight: expandTab === "region" ? 700 : 400,
+                    fontSize: 13,
+                  }}
+                >
+                  {t("expand.tabRegion")}
+                </button>
+                <button
+                  onClick={() => setExpandTab("map")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 0",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 8,
+                    background: expandTab === "map" ? "rgba(255,255,255,0.1)" : "transparent",
+                    color: "#e0e0e0",
+                    cursor: "pointer",
+                    fontWeight: expandTab === "map" ? 700 : 400,
+                    fontSize: 13,
+                  }}
+                >
+                  {t("expand.tabMap")}
+                </button>
+              </div>
+
+              {expandTab === "map" && (
+                <div>
+                  <label style={labelStyle}>{t("expand.mapPromptLabel")}</label>
+                  <textarea
+                    value={expandPrompt}
+                    onChange={(e) => setExpandPrompt(e.target.value)}
+                    placeholder={t("expand.mapPromptPlaceholder")}
+                    rows={4}
+                    style={textareaStyle}
+                  />
+                  <label style={{ ...labelStyle, marginTop: 10 }}>{t("expand.sideLabel")}</label>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {(["auto", "right", "left", "top", "bottom"] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setExpandSide(s)}
+                        style={{
+                          flex: "1 1 auto",
+                          minWidth: 52,
+                          padding: "5px 8px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: 4,
+                          background: expandSide === s ? "rgba(255,255,255,0.14)" : "transparent",
+                          color: expandSide === s ? "#fff" : "#9aa4b2",
+                          fontWeight: expandSide === s ? 700 : 400,
+                        }}
+                      >
+                        {t(`expand.side.${s}`)}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#7d8794", lineHeight: 1.5 }}>
+                    {t("expand.sideHint")}
+                  </div>
+                  <button
+                    onClick={doExpandMap}
+                    disabled={busy || !expandPrompt.trim()}
+                    style={primaryBtnStyle(busy || !expandPrompt.trim())}
+                  >
+                    {busy ? t("expand.generating") : t("expand.expandMapBtn")}
+                  </button>
+                  {busy && expandStage && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#9aa4b2", lineHeight: 1.5 }}>
+                      {expandStage}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(expandTab === "character" || expandTab === "region") && (
+                <>
+                  <label style={labelStyle}>
+                    {expandTab === "character" ? t("expand.characterPromptLabel") : t("expand.regionPromptLabel")}
+                  </label>
+                  <textarea
+                    value={expandPrompt}
+                    onChange={(e) => setExpandPrompt(e.target.value)}
+                    placeholder={expandTab === "character" ? t("expand.characterPromptPlaceholder") : t("expand.regionPromptPlaceholder")}
+                    rows={4}
+                    style={textareaStyle}
+                  />
+                  <button
+                    onClick={doExpand}
+                    disabled={busy || !expandPrompt.trim()}
+                    style={primaryBtnStyle(busy || !expandPrompt.trim())}
+                  >
+                    {busy ? t("expand.generating") : t("expand.addBtn")}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

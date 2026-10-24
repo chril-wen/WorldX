@@ -2,6 +2,11 @@ import type { Perception, GameTime } from "../types/index.js";
 import type { WorldManager } from "../core/world-manager.js";
 import type { CharacterManager } from "../core/character-manager.js";
 import { getEmotionLabel } from "../core/emotion-manager.js";
+import {
+  describeWeatherFor,
+  getWeatherState,
+  resolveExposure,
+} from "../core/weather-manager.js";
 import * as eventStore from "../store/event-store.js";
 
 export function buildPerception(
@@ -95,6 +100,13 @@ export function buildPerception(
 
   const recentActions = getRecentActionDescriptions(charId, gameTime);
 
+  const weather = describeWeatherFor(
+    getWeatherState(),
+    resolveExposure(undefined, location),
+    gameTime,
+    worldManager.getSceneConfig().tickDurationMinutes,
+  );
+
   const myZone =
     hasZones && state.location === "main_area"
       ? worldManager.getMainAreaPointZone(state.mainAreaPointId)
@@ -104,6 +116,7 @@ export function buildPerception(
     currentLocation: location.name,
     locationDescription: location.description,
     myZone,
+    weather,
     objectsHere,
     charactersHere,
     recentEnvironmentChanges,
