@@ -3,6 +3,11 @@
 node_modules/
 dist/
 *.db
+*.sqlite
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
 .env
 output/worlds/*/
 !output/worlds/.gitkeep
