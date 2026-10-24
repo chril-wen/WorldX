@@ -14,13 +14,23 @@
     "compare:models": "node scripts/compare-models.mjs",
     "demo:region-overlay": "node generators/map/src/demo-region-overlay.mjs",
     "generate:map": "node generators/map/src/index.mjs",
-    "generate:character": "node generators/character/src/index.mjs"
+    "generate:character": "node generators/character/src/index.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "npm run typecheck:server && npm run typecheck:client",
+    "typecheck:server": "cd server && tsc --noEmit",
+    "typecheck:client": "cd client && tsc --noEmit",
+    "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^5.0.5",
+    "jsdom": "^29.1.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^5.0.5"
   }
 }
