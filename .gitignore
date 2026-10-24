@@ -14,3 +14,6 @@ output/worlds/*/
 .DS_Store
 *.log
 library/worlds/*/timelines/
+
+# 插件测试的临时目录（跑测试时建在仓库内，因为 vitest 只能 transform 项目内的文件）
+orchestrator/src/.tmp-plugin-tests/

@@ -84,18 +84,20 @@ export function validatePlugin(plugin) {
     throw new Error("插件必须有非空的 name 字段");
   }
 
+  // 先查钩子**类型** —— 「钩子写成了字符串」比「一个钩子都没实现」
+  // 更具体，先报它，作者才知道自己错在哪。
+  for (const hook of PLUGIN_HOOKS) {
+    if (plugin[hook] !== undefined && typeof plugin[hook] !== "function") {
+      throw new Error(`插件 "${plugin.name}" 的 ${hook} 钩子必须是函数`);
+    }
+  }
+
   const implemented = PLUGIN_HOOKS.filter((hook) => typeof plugin[hook] === "function");
 
   if (implemented.length === 0) {
     throw new Error(
       `插件 "${plugin.name}" 没有实现任何钩子 —— 至少要实现一个：${PLUGIN_HOOKS.join(" / ")}`,
     );
-  }
-
-  for (const hook of PLUGIN_HOOKS) {
-    if (plugin[hook] !== undefined && typeof plugin[hook] !== "function") {
-      throw new Error(`插件 "${plugin.name}" 的 ${hook} 钩子必须是函数`);
-    }
   }
 
   if (plugin.critical !== undefined && typeof plugin.critical !== "boolean") {
