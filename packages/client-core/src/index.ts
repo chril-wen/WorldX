@@ -43,6 +43,19 @@ export {
  *
  * 这里 re-export 出来，是因为 client 用它读地图 —— 它属于「地图数据层」
  * 的对外接口的一部分。
+ *
+ * ## 为什么用子路径，不从包根导入
+ *
+ * 从 `@worldx/core` 根导入会把**整个 core** 拉进 client 的模块图 ——
+ * 包括 `engine/world-manager.js`，它 `import fs from "node:fs"`，
+ * 顶层还读 `process.env`。
+ *
+ * 现在浏览器里靠 tree-shaking 恰好摇掉了（bundle 里搜不到 `process.env`），
+ * 但那是**运气**：world-manager 一旦有顶层副作用，浏览器里就会
+ * `process is not defined` 崩掉。
+ *
+ * 子路径导入把依赖面缩到两个文件：
+ * `contracts/world.js`（纯类型 + 一个常量）和 `engine/tmj-parser.js`（纯函数）。
  */
 export {
   DEFAULT_TILE_SIZE,
@@ -51,12 +64,12 @@ export {
   toLocationRects,
   gridToPixel,
   pixelToGrid,
-} from "@worldx/core";
+} from "@worldx/core/engine/tmj-parser.js";
 export type {
   ParsedTmj,
   TmjBackground,
   TmjObject,
-} from "@worldx/core";
+} from "@worldx/core/engine/tmj-parser.js";
 
 export type {
   GridPoint,
@@ -72,4 +85,4 @@ export type {
  * 直接 re-export core 的那一份 —— 改造前 client 和 core 各定义一次，
  * 值相同，注释里还互相声明「是同一个值」。
  */
-export { DEFAULT_CENTER_LOCATION_ID } from "@worldx/core";
+export { DEFAULT_CENTER_LOCATION_ID } from "@worldx/core/contracts/world.js";

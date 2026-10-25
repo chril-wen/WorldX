@@ -17,7 +17,7 @@
  * 只是它现在指向 core 的那一个定义。
  */
 
-import type { MainAreaPointConfig } from "@worldx/core";
+import type { MainAreaPointConfig } from "@worldx/core/contracts/world.js";
 
 /**
  * 主区域点位 —— 直接用 core 的定义。
