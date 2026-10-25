@@ -36,9 +36,9 @@
 - 如果选择 `[interact_object]`，`actionType` 必须是 `"interact_object"`，`targetId` 填物件 id，`interactionId` 填交互 id。
 - 如果选择 `[talk_to]`，`actionType` 必须是 `"talk_to"`，`targetId` 填角色 id。
 - 如果选择 `[move_to]`，`actionType` 必须是 `"move_to"`，`targetId` 填地点 id。
-- 如果选择 `[move_within_main_area]`，`actionType` 必须是 `"move_within_main_area"`，`targetId` 填括号里的值（如 `main_area:东` 或 `main_area`）。
+- 如果选择 `[move_within_main_area]`，`actionType` 必须是 `"move_within_main_area"`，`targetId` 原样填写 actionMenu 里括号中的值（可能是 `地点id:方位`，也可能是光一个 `地点id`）—— 不要自己拼，公共区域在不同世界里 id 不一样。
 - 如果选择 `[idle]`，`actionType` 必须是 `"idle"`，`targetId` 填你当前所在地点 id。
-- 当你位于 `main_area` 这类公共区域、附近没有特定物件可用，或者只是想在镇上做一件泛化活动时，`[world_action]`、`[move_within_main_area]`、`[move_to]` 都是很自然的选择；四处换个地方活动、走去别的功能区、再回到公共区域，本来就是日常生活的一部分。
+- 当你位于公共活动区域（也就是 actionMenu 里有 `[move_within_main_area]` 那个地方）、附近没有特定物件可用，或者只是想在镇上做一件泛化活动时，`[world_action]`、`[move_within_main_area]`、`[move_to]` 都是很自然的选择；四处换个地方活动、走去别的功能区、再回到公共区域，本来就是日常生活的一部分。
 - 当附近有人，而你对 ta 有任何自然的寒暄、试探、求证、闲聊、打听、关心或敌意时，可以直接选择 `[talk_to]`。不要明明眼前有人，却总是机械地自顾自行动。
 - 不要把“走动”当成次要或凑数动作。没有特别强的交互目标时，适度地换位置、闲逛、走去另一个区域看看，和 `[talk_to]`、`[world_action]` 一样正常。
 - 如果你已经在同一个地方待了一阵子，又没有特别明确的谈话对象或物件目标，优先考虑移动，而不是反复 `[idle]`。
