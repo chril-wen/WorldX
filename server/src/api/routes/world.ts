@@ -197,6 +197,9 @@ router.post("/reload", (_req, res) => {
   }
   try {
     appContext.worldManager.reloadLocations();
+    // 角色配置也要重载 —— 角色级规则覆盖（角色配置里的 rules 段）
+    // 缓存在 CharacterManager 里，不重载的话改了不生效。
+    appContext.characterManager.reloadProfiles();
     const locations = appContext.worldManager.getAllLocations();
     res.json({
       ok: true,

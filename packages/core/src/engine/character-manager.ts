@@ -121,6 +121,26 @@ export class CharacterManager {
 
   }
 
+  /**
+   * 重新读一遍角色配置 —— **不碰运行时状态**。
+   *
+   * 为什么要它：角色配置里有 `rules` 段（角色级规则覆盖）。
+   * 改了角色的规则之后要生效，光 `worldManager.reloadLocations()` 不够 ——
+   * 它只重载世界级规则，角色配置还是缓存里的旧的。
+   *
+   * 所以规则改完要调它。
+   *
+   * 刻意**不**重跑 `initialize()`：那会重新分配出生位置、
+   * 补初始记忆 —— 那是「初始化世界」该干的事，不是「重载配置」该干的事。
+   */
+  reloadProfiles(): void {
+    this.config.invalidateCharacterProfileCache();
+    const profiles = this.config.loadCharacterProfiles();
+    for (const p of profiles) {
+      this.profiles.set(p.id, p);
+    }
+  }
+
   getProfile(charId: string): CharacterProfile {
     const p = this.profiles.get(charId);
     if (!p) throw new Error(`Profile not found: ${charId}`);

@@ -257,12 +257,71 @@ describe("世界规则接入运行时", () => {
         rules: {
           emotion: { decayRate: "很快", 拼错的键: 1 },
           不存在的组: { x: 1 },
+          memory: { recencyDecayRate: "x" },
         },
       }),
       storage,
     );
     expect(() => wm.initialize()).not.toThrow();
     expect(wm.getRules().emotion.decayRate).toBe(0.95);
+    expect(wm.getRules().memory.recencyDecayRate).toBe(0.05);
+  });
+
+  it("reloadProfiles 之后角色级规则跟着更新（改完不用重启 server）", () => {
+    let charRules: unknown = undefined;
+    const source = makeConfigSource(
+      { rules: { emotion: { decayRate: 0.9 } } },
+      [{ id: "char_1" }],
+    );
+    const baseProfiles = source.loadCharacterProfiles();
+    const wrapped: WorldConfigSource = {
+      ...source,
+      loadCharacterProfiles: () =>
+        baseProfiles.map((p) => ({ ...p, rules: charRules })),
+    };
+    const wm = new WorldManager(wrapped, storage);
+    wm.initialize();
+    const cm = new CharacterManager(wm, storage, wrapped);
+    cm.initialize();
+
+    // 一开始没有角色级 override
+    expect(cm.getRulesFor("char_1").memory.recencyDecayRate).toBe(0.05);
+
+    // 外部改了角色的 rules 段
+    charRules = { memory: { recencyDecayRate: 0.9 } };
+    cm.reloadProfiles();
+
+    // 重载之后生效了
+    expect(cm.getRulesFor("char_1").memory.recencyDecayRate).toBe(0.9);
+    // 没被覆盖的项仍是世界级
+    expect(cm.getRulesFor("char_1").emotion.decayRate).toBe(0.9);
+  });
+
+  it("检索权重跟着规则走 —— 改 relevanceWeight 立刻生效（不用重启）", () => {
+    // 权重之前是构造时抄一份的，改了 world.json 也不生效。
+    // 规则既然是数据，权重就该跟着数据走。
+    const source = makeConfigSource(
+      { rules: { memory: { relevanceWeight: 10 } } },
+      [{ id: "char_1" }],
+    );
+    const wm = new WorldManager(source, storage);
+    wm.initialize();
+    const cm = new CharacterManager(wm, storage, source);
+    cm.initialize();
+
+    // 加一条记忆，重要度 0、情感 0 —— 分数只可能来自相关度权重
+    cm.memoryManager.addMemory({
+      characterId: "char_1",
+      type: "observation",
+      content: "无关的事",
+      gameTime: { day: 1, tick: 0 },
+      importance: 0,
+      emotionalValence: 0,
+      emotionalIntensity: 0,
+    });
+
+    const rules = cm.memoryManager.getRulesFor("char_1");
+    expect(rules.relevanceWeight).toBe(10);
   });
 });
 

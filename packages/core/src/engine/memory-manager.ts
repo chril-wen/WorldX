@@ -18,7 +18,7 @@ function tokenize(text: string): string[] {
 }
 
 export class MemoryManager {
-  private weights: RetrievalWeights;
+  private weights?: Partial<RetrievalWeights>;
   private cache = new Map<string, MemoryEntry[]>();
   private memoryStore: MemoryStorage;
   private rules: MemoryRules;
@@ -46,13 +46,7 @@ export class MemoryManager {
     this.memoryStore = memoryStore;
     this.rules = rules;
     this.rulesResolver = rulesResolver;
-    this.weights = {
-      relevance: weights?.relevance ?? rules.relevanceWeight,
-      recency: weights?.recency ?? rules.recencyWeight,
-      importance: weights?.importance ?? rules.importanceWeight,
-      emotionalIntensity:
-        weights?.emotionalIntensity ?? rules.emotionalIntensityWeight,
-    };
+    this.weights = weights;
   }
 
   /** 当前生效的记忆规则（默认规则，不含角色级覆盖）。 */
@@ -70,6 +64,24 @@ export class MemoryManager {
   }
 
   /**
+   * 取某个角色生效的检索权重。
+   *
+   * 权重**不是构造时定死的** —— 它们从角色生效的规则里现算。
+   * 之前是构造时抄一份，改了 world.json 的 `memory.relevanceWeight`
+   * 也不会生效（要重启 server 才行）。规则既然是数据，权重就该跟着数据走。
+   */
+  private getWeightsFor(characterId: string): RetrievalWeights {
+    const rules = this.getRulesFor(characterId);
+    return {
+      relevance: this.weights?.relevance ?? rules.relevanceWeight,
+      recency: this.weights?.recency ?? rules.recencyWeight,
+      importance: this.weights?.importance ?? rules.importanceWeight,
+      emotionalIntensity:
+        this.weights?.emotionalIntensity ?? rules.emotionalIntensityWeight,
+    };
+  }
+
+  /**
    * 换一套默认记忆规则（世界级）。
    *
    * 换完必须清缓存 —— 缓存里存的是记忆条目本身（不含评分），
@@ -77,12 +89,6 @@ export class MemoryManager {
    */
   setRules(rules: MemoryRules): void {
     this.rules = rules;
-    this.weights = {
-      relevance: rules.relevanceWeight,
-      recency: rules.recencyWeight,
-      importance: rules.importanceWeight,
-      emotionalIntensity: rules.emotionalIntensityWeight,
-    };
     this.cache.clear();
   }
 
@@ -149,6 +155,7 @@ export class MemoryManager {
     const currentTotalTicks = absoluteTick(params.currentTime);
     const contextLower = params.contextKeywords.map((k) => k.toLowerCase());
     const rules = this.getRulesFor(params.characterId);
+    const weights = this.getWeightsFor(params.characterId);
 
     const scored = allMemories.map((memory) => {
       const score = this.computeScore(
@@ -156,6 +163,7 @@ export class MemoryManager {
         currentTotalTicks,
         contextLower,
         rules,
+        weights,
         params.relatedCharacterIds,
         params.relatedLocation,
       );
@@ -290,6 +298,7 @@ export class MemoryManager {
     currentTotalTicks: number,
     contextLower: string[],
     rules: MemoryRules,
+    weights: RetrievalWeights,
     relatedCharacterIds?: string[],
     relatedLocation?: string,
   ): number {
@@ -312,10 +321,10 @@ export class MemoryManager {
     const emotionalIntensity = memory.emotionalIntensity / 10;
 
     return (
-      this.weights.relevance * relevance +
-      this.weights.recency * recency +
-      this.weights.importance * importance +
-      this.weights.emotionalIntensity * emotionalIntensity
+      weights.relevance * relevance +
+      weights.recency * recency +
+      weights.importance * importance +
+      weights.emotionalIntensity * emotionalIntensity
     );
   }
 
