@@ -7,6 +7,14 @@
 
 export * from "./contracts/index.js";
 
+export {
+  DEFAULT_CENTER_LOCATION_ID,
+  WORLD_SCHEMA_VERSION,
+} from "./contracts/world.js";
+
+export { migrateWorldConfig } from "./engine/world-migration.js";
+export { normalizeLocations } from "./engine/location-normalizer.js";
+
 export { updateEmotion, decayEmotion, getEmotionLabel } from "./engine/emotion-manager.js";
 export { decayNeeds } from "./engine/needs-manager.js";
 export { MemoryManager } from "./engine/memory-manager.js";

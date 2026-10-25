@@ -23,6 +23,8 @@ export function buildPerception(
 ): Perception {
   const state = characterManager.getState(charId);
   const location = worldManager.getLocation(state.location);
+  // 中心区域（世界的公共枢纽）—— 角色在里面用点位寻址。
+  const centerLocationId = worldManager.getCenterLocationId();
 
   if (!location) {
     return {
@@ -48,7 +50,7 @@ export function buildPerception(
   });
 
   const charsAtLoc =
-    state.location === "main_area"
+    state.location === centerLocationId
       ? characterManager.getAllStates().map((s) => ({
           profile: characterManager.getProfile(s.characterId),
           state: s,
@@ -65,7 +67,7 @@ export function buildPerception(
       const targetLocation =
         worldManager.getLocation(c.state.location)?.name ?? c.state.location;
       const zone =
-        hasZones && c.state.location === "main_area"
+        hasZones && c.state.location === centerLocationId
           ? worldManager.getMainAreaPointZone(c.state.mainAreaPointId)
           : undefined;
       return {
@@ -120,7 +122,7 @@ export function buildPerception(
   );
 
   const myZone =
-    hasZones && state.location === "main_area"
+    hasZones && state.location === centerLocationId
       ? worldManager.getMainAreaPointZone(state.mainAreaPointId)
       : undefined;
 

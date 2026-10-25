@@ -32,10 +32,16 @@ export function buildActionMenu(
   const state = characterManager.getState(charId);
   const profile = characterManager.getProfile(charId);
   const gameTime = worldManager.getCurrentTime();
+  // 中心区域（世界的公共枢纽）—— action menu 里的 targetId 用实际 id。
+  const centerLocationId = worldManager.getCenterLocationId();
 
   const recentInteractionIds = getRecentInteractionIds(charId, gameTime, eventStore);
   const isAnchored = !!profile.anchor;
-  const canInitiateDialogue = canInitiateDialogueHere(profile.anchor, state.location);
+  const canInitiateDialogue = canInitiateDialogueHere(
+    profile.anchor,
+    state.location,
+    worldManager.getCenterLocationId(),
+  );
 
   const lines: string[] = [];
   let idx = 1;
@@ -180,18 +186,25 @@ export function buildActionMenu(
   if (!isAnchored) {
     const adjacent = worldManager.getAdjacentLocations(state.location);
     const moveLines: string[] = [];
-    if (state.location === "main_area" && worldManager.hasMultipleMainAreaPoints()) {
+    if (
+      state.location === worldManager.getCenterLocationId() &&
+      worldManager.hasMultipleMainAreaPoints()
+    ) {
       const zones = worldManager.getAvailableMainAreaZones();
       const myZone = worldManager.getMainAreaPointZone(state.mainAreaPointId);
       if (zones.length > 1) {
         for (const z of zones) {
           if (z === myZone) continue;
           const label = z === "中" ? "中央" : `${z}侧`;
-          moveLines.push(`${idx}. [move_within_main_area] 走到主区域${label}(main_area:${z})`);
+          moveLines.push(
+            `${idx}. [move_within_main_area] 走到主区域${label}(${centerLocationId}:${z})`,
+          );
           idx++;
         }
       } else {
-        moveLines.push(`${idx}. [move_within_main_area] 在主区域内换个地方活动(main_area)`);
+        moveLines.push(
+          `${idx}. [move_within_main_area] 在主区域内换个地方活动(${centerLocationId})`,
+        );
         idx++;
       }
     }
@@ -253,11 +266,12 @@ function isLegalDirectTalkTarget(
 function canInitiateDialogueHere(
   anchor: { type: string; targetId: string } | undefined,
   currentLocation: string,
+  centerLocationId: string,
 ): boolean {
   if (!anchor) return true;
   return (
     anchor.type === "region" &&
-    currentLocation !== "main_area" &&
+    currentLocation !== centerLocationId &&
     currentLocation === anchor.targetId
   );
 }

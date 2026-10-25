@@ -368,7 +368,7 @@ router.post("/map", async (req: Request, res: Response) => {
     try {
       // 刷新运行时
       appContext.worldManager.reloadLocations();
-      appContext.characterManager.reassignAllToMainArea();
+      appContext.characterManager.reassignAllToCenterArea();
 
       send("done", {
         ok: true,

@@ -114,8 +114,44 @@ export interface WorldGlobalEntry {
   value: string;
 }
 
+/**
+ * 中心区域的默认 id。
+ *
+ * 中心区域 = 世界的**公共枢纽** —— 角色在里面用
+ * `mainAreaPointId` 点位寻址（而不是靠区域 id 定位）。
+ *
+ * 旧世界没有 `centerLocationId` 字段时用它 —— 行为跟改造前完全一致。
+ */
+export const DEFAULT_CENTER_LOCATION_ID = "main_area";
+
+/**
+ * world.json 的 schema 版本。
+ *
+ * **缺失时视为 1**（v1 = 没有 `schemaVersion` 字段的世界）。
+ * 迁移函数见 `engine/world-migration.ts`。
+ */
+export const WORLD_SCHEMA_VERSION = 2;
+
 /** 世界配置根结构 */
 export interface WorldConfig {
+  /**
+   * schema 版本 —— 缺失时视为 1。
+   *
+   * 由 `migrateWorldConfig()` 维护，不要手写。
+   */
+  schemaVersion?: number;
+
+  /**
+   * 中心区域的 id —— 世界的公共枢纽。
+   *
+   * 缺失时视为 `"main_area"`。
+   *
+   * 之前这个概念是**写死**的 `"main_area"` 字面量，散落在 79 处代码里。
+   * 抽成字段之后，世界可以有自己的中心区域名 ——
+   * 而代码只管问「中心区域是哪个」。
+   */
+  centerLocationId?: string;
+
   worldName?: string;
   worldDescription?: string;
   worldSocialContext?: string;

@@ -696,7 +696,7 @@ export class SimulationEngine {
     stateB: { location: string; mainAreaPointId?: string | null },
   ): boolean {
     if (stateA.location !== stateB.location) return false;
-    if (stateA.location !== "main_area") return true;
+    if (stateA.location !== this.worldManager.getCenterLocationId()) return true;
     // main_area can cover a large public space. Only start speaking in-place
     // when the point graph says the two characters are already nearby.
     return this.worldManager.areMainAreaPointsCloseEnoughForDialogueStart(
@@ -715,7 +715,10 @@ export class SimulationEngine {
 
     const stateA = this.characterManager.getState(charId);
     const stateB = this.characterManager.getState(decision.targetId);
-    if (stateA.location !== "main_area" || stateB.location !== "main_area") {
+    if (
+      stateA.location !== this.worldManager.getCenterLocationId() ||
+      stateB.location !== this.worldManager.getCenterLocationId()
+    ) {
       return null;
     }
     if (
@@ -754,7 +757,7 @@ export class SimulationEngine {
     if (!profile.anchor) return true;
     return (
       profile.anchor.type === "region" &&
-      currentLocation !== "main_area" &&
+      currentLocation !== this.worldManager.getCenterLocationId() &&
       currentLocation === profile.anchor.targetId
     );
   }

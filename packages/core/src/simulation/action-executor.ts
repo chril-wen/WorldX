@@ -11,6 +11,14 @@ import { updateEmotion } from "../engine/emotion-manager.js";
 
 const WORLD_ACTION_TARGET_PREFIX = "world_action:";
 
+/**
+ * 正则里要用的字面量 —— 中心区域的 id 可能含正则元字符
+ * （世界作者可以起 `town.square` 这种名字）。
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function executeAction(
   decision: ActionDecision,
   charId: string,
@@ -22,6 +30,8 @@ export function executeAction(
   const state = characterManager.getState(charId);
   const profile = characterManager.getProfile(charId);
   const absNow = absoluteTick(gameTime);
+  // 中心区域（世界的公共枢纽）—— 角色在里面用点位寻址。
+  const centerLocationId = worldManager.getCenterLocationId();
 
   const innerMonologue =
     typeof decision.innerMonologue === "string" && decision.innerMonologue.trim().length > 0
@@ -166,10 +176,10 @@ export function executeAction(
       const prevLocation = state.location;
       const prevPointId = state.mainAreaPointId;
       const nextPointId =
-        decision.targetId === "main_area"
+        decision.targetId === centerLocationId
           ? worldManager.pickDistantMainAreaPointId(
               state.mainAreaPointId,
-              `${charId}:${gameTime.day}:${gameTime.tick}:main_area`,
+              `${charId}:${gameTime.day}:${gameTime.tick}:${centerLocationId}`,
             )
           : null;
       characterManager.updateState(charId, {
@@ -208,16 +218,20 @@ export function executeAction(
         );
         break;
       }
-      if (state.location !== "main_area") {
+      if (state.location !== centerLocationId) {
         console.warn(
-          `[ActionExecutor] Dropping move_within_main_area for ${charId}: not currently in main_area`,
+          `[ActionExecutor] Dropping move_within_main_area for ${charId}: not currently in ${centerLocationId}`,
         );
         break;
       }
 
       const zoneSeed = `${charId}:${gameTime.day}:${gameTime.tick}:within`;
       const pointMatch = decision.targetId?.match(/^main_area_point:(.+)$/);
-      const zoneMatch = decision.targetId?.match(/^main_area:(.+)$/);
+      // 区域前缀是**中心区域的 id** —— action menu 用实际 id 生成，
+      // 这里就按实际 id 解析。
+      const zoneMatch = decision.targetId?.match(
+        new RegExp(`^${escapeRegExp(centerLocationId)}:(.+)$`),
+      );
       let nextPointId: string | null;
       if (pointMatch && worldManager.getMainAreaPoint(pointMatch[1])) {
         nextPointId = pointMatch[1];
@@ -235,7 +249,7 @@ export function executeAction(
       }
 
       characterManager.updateState(charId, {
-        location: "main_area",
+        location: centerLocationId,
         mainAreaPointId: nextPointId,
         currentAction: "traveling",
         currentActionTarget: null,
@@ -249,11 +263,11 @@ export function executeAction(
         gameTick: gameTime.tick,
         type: "movement",
         actorId: charId,
-        location: "main_area",
+        location: centerLocationId,
         data: {
           actionType: "move_within_main_area",
-          from: "main_area",
-          to: "main_area",
+          from: centerLocationId,
+          to: centerLocationId,
           fromPointId: state.mainAreaPointId,
           toPointId: nextPointId,
           reason: decision.reason,

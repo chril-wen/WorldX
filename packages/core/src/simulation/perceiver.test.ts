@@ -27,6 +27,7 @@ function makeWorldManager(overrides: Partial<WorldManager> = {}): WorldManager {
     getAvailableMainAreaZones: () => [],
     getMainAreaPointZone: () => undefined,
     getSceneConfig: () => ({ tickDurationMinutes: 30 }),
+    getCenterLocationId: () => "main_area",
     ...overrides,
   } as unknown as WorldManager;
 }

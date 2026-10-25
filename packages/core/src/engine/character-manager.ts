@@ -218,15 +218,18 @@ export class CharacterManager {
    * Clear all character positions so the next tick's movement decision
    * will reassign them to valid walkable points on the map.
    */
-  reassignAllToMainArea(): void {
+  reassignAllToCenterArea(): void {
+    const centerLocationId = this.worldManager.getCenterLocationId();
     for (const charId of this.profiles.keys()) {
       this.storage.characterStates.updateCharacterState(charId, {
         mainAreaPointId: null,
         currentAction: null,
-        location: "main_area",
+        location: centerLocationId,
       });
     }
-    console.log(`[CharacterManager] Reassigned ${this.profiles.size} characters to main_area`);
+    console.log(
+      `[CharacterManager] Reassigned ${this.profiles.size} characters to ${centerLocationId}`,
+    );
   }
 
   /** Editable subset of CharacterProfile fields. */
@@ -353,7 +356,7 @@ function buildInitialCharacterState(
 ): CharacterState {
   const spawnSeed = `${profile.id}:${spawnSeedSalt}`;
   let mainAreaPointId: string | null = null;
-  if (profile.startPosition === "main_area") {
+  if (profile.startPosition === worldManager.getCenterLocationId()) {
     if (profile.anchor?.type === "element") {
       const elementPointId = `element_${profile.anchor.targetId}`;
       const point = worldManager.getMainAreaPoint(elementPointId);

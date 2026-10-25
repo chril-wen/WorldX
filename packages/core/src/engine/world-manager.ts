@@ -15,6 +15,8 @@ import type {
 } from "../contracts/index.js";
 import { setSceneConfig, isSceneComplete, getTicksPerScene } from "./time-helpers.js";
 import { isBlockedByWeather, WeatherManager } from "./weather-manager.js";
+import { normalizeLocations } from "./location-normalizer.js";
+import { DEFAULT_CENTER_LOCATION_ID } from "../contracts/world.js";
 import type { WorldConfigSource } from "../contracts/world-config.js";
 import type { SnapshotMeta, Storage } from "../contracts/storage.js";
 import { DEFAULT_RULES, mergeRules } from "./rules.js";
@@ -58,6 +60,14 @@ export class WorldManager {
   private sceneConfig!: SceneConfig;
   private worldName = "unknown";
   private worldDescription = "";
+
+  /**
+   * 中心区域的 id —— 世界的公共枢纽。
+   *
+   * 角色在里面用 `mainAreaPointId` 点位寻址。
+   * 旧世界没有这个字段时是 `"main_area"`（跟改造前完全一致）。
+   */
+  private centerLocationId: string = DEFAULT_CENTER_LOCATION_ID;
   private worldSocialContext = "";
   private contentLanguage: "zh" | "en" = "zh";
   private originalPrompt = "";
@@ -85,9 +95,11 @@ export class WorldManager {
       this.config.setWorldDir(worldDirPath);
     }
     const config = this.config.loadWorldConfig();
+    this.centerLocationId = config.centerLocationId ?? DEFAULT_CENTER_LOCATION_ID;
     this.locationConfigs = normalizeLocations(
       config.locations,
-      config.worldName ?? "main_area",
+      this.centerLocationId,
+      config.worldName ?? "",
       config.worldDescription ?? "",
     );
     this.mainAreaPoints = rebuildMainAreaPointAdjacencyFromTmj(
@@ -131,9 +143,12 @@ export class WorldManager {
     this.config.reloadConfigs();
 
     const config = this.config.loadWorldConfig();
+    // 中心 id 也会被外部改写 —— 规则、区域都会跟着重载，它也得跟着。
+    this.centerLocationId = config.centerLocationId ?? DEFAULT_CENTER_LOCATION_ID;
     this.locationConfigs = normalizeLocations(
       config.locations,
-      config.worldName ?? "main_area",
+      this.centerLocationId,
+      config.worldName ?? "",
       config.worldDescription ?? "",
     );
     // The map may have been expanded: world size and walkable points change with it.
@@ -309,6 +324,16 @@ export class WorldManager {
 
   getAllLocations(): LocationConfig[] {
     return this.locationConfigs;
+  }
+
+  /**
+   * 中心区域的 id —— 世界的公共枢纽。
+   *
+   * 角色在里面用 `mainAreaPointId` 点位寻址。
+   * 旧世界没有 `centerLocationId` 字段时是 `"main_area"`。
+   */
+  getCenterLocationId(): string {
+    return this.centerLocationId;
   }
 
   getMainAreaPoints(): MainAreaPointConfig[] {
@@ -752,65 +777,6 @@ export class WorldManager {
       return null;
     }
   }
-}
-
-function normalizeLocations(
-  locations: LocationConfig[] | undefined,
-  worldName: string,
-  worldDescription: string,
-): LocationConfig[] {
-  const authored = (Array.isArray(locations) ? locations : []).map((location) => ({
-    ...location,
-    adjacentLocations: Array.isArray(location.adjacentLocations)
-      ? unique(location.adjacentLocations.filter(Boolean))
-      : [],
-    objects: Array.isArray(location.objects) ? location.objects : [],
-  }));
-
-  const authoredIds = authored
-    .map((location) => location.id)
-    .filter((locationId) => locationId && locationId !== "main_area");
-
-  const hasMainArea = authored.some((location) => location.id === "main_area");
-  const withMainArea = hasMainArea
-    ? authored
-    : [
-        {
-          id: "main_area",
-          name: "主区域",
-          description: worldDescription || `${worldName}中的公共活动区域`,
-          adjacentLocations: [...authoredIds],
-          objects: [],
-        },
-        ...authored,
-      ];
-
-  const allIds = new Set(withMainArea.map((location) => location.id));
-  const hasAnyAuthoredAdjacency = withMainArea.some(
-    (location) =>
-      location.id !== "main_area" && (location.adjacentLocations?.length ?? 0) > 0,
-  );
-
-  return withMainArea.map((location) => {
-    let adjacent = (location.adjacentLocations ?? []).filter(
-      (adjacentId) => adjacentId !== location.id && allIds.has(adjacentId),
-    );
-
-    if (location.id === "main_area") {
-      adjacent = unique([...adjacent, ...authoredIds]);
-    } else if (adjacent.length === 0) {
-      adjacent = hasAnyAuthoredAdjacency
-        ? ["main_area"]
-        : Array.from(allIds).filter((adjacentId) => adjacentId !== location.id);
-    } else {
-      adjacent = unique(["main_area", ...adjacent]);
-    }
-
-    return {
-      ...location,
-      adjacentLocations: adjacent,
-    };
-  });
 }
 
 function unique(values: string[]): string[] {
