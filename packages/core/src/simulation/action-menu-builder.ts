@@ -2,8 +2,24 @@ import type { Perception } from "../contracts/index.js";
 import type { WorldManager } from "../engine/world-manager.js";
 import type { CharacterManager } from "../engine/character-manager.js";
 import type { EventStorage } from "../contracts/events.js";
+import { DEFAULT_RULES } from "../engine/rules.js";
+import type { ActionRules } from "../engine/rules.js";
 
 const INTERACTION_COOLDOWN_TICKS = 4;
+
+/**
+ * 把时长（分钟）格式化成「约 X 小时」或「约 X 分钟」。
+ *
+ * 超过 `longActionMinutes` 才用小时 —— 默认 60 分钟。
+ */
+function formatDuration(
+  durationMin: number,
+  rules: ActionRules,
+): string {
+  return durationMin >= rules.longActionMinutes
+    ? `约${(durationMin / 60).toFixed(1).replace(/\.0$/, "")}小时`
+    : `约${durationMin}分钟`;
+}
 
 export function buildActionMenu(
   charId: string,
@@ -11,6 +27,7 @@ export function buildActionMenu(
   worldManager: WorldManager,
   characterManager: CharacterManager,
   eventStore: EventStorage,
+  actionRules: ActionRules = DEFAULT_RULES.action,
 ): string {
   const state = characterManager.getState(charId);
   const profile = characterManager.getProfile(charId);
@@ -30,10 +47,7 @@ export function buildActionMenu(
     if (!action.repeatable && recentInteractionIds.has(action.id)) continue;
 
     const durationMin = action.duration * sceneConfig.tickDurationMinutes;
-    const durationStr =
-      durationMin >= 60
-        ? `约${(durationMin / 60).toFixed(1).replace(/\.0$/, "")}小时`
-        : `约${durationMin}分钟`;
+    const durationStr = formatDuration(durationMin, actionRules);
 
     worldActionLines.push(
       `${idx}. [world_action] "${action.name}"(${action.id})（${durationStr}）`,
@@ -85,10 +99,7 @@ export function buildActionMenu(
       if (isAnchored) continue;
 
       const durationMin = inter.duration * sceneConfig.tickDurationMinutes;
-      const durationStr =
-        durationMin >= 60
-          ? `约${(durationMin / 60).toFixed(1).replace(/\.0$/, "")}小时`
-          : `约${durationMin}分钟`;
+      const durationStr = formatDuration(durationMin, actionRules);
 
       objectLines.push(
         `${idx}. [interact_object] ${obj.name}(${obj.id}) → "${inter.name}"(${inter.id})（${durationStr}）`,

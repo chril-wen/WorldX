@@ -55,6 +55,20 @@ export interface CharacterProfile {
   affinity?: number;
   /** 关系数值：与其他角色的平均紧张度（0-5，默认0） */
   tension?: number;
+
+  /**
+   * 角色级规则覆盖 —— 只写要改的项，其余继承世界级。
+   *
+   * 例：
+   * ```json
+   * { "rules": { "memory": { "recencyDecayRate": 0.2 } } }
+   * ```
+   * 这个角色记性特别短。
+   *
+   * 类型是 `unknown` 而不是 `WorldRules` —— 角色配置是**用户写的 JSON**，
+   * 只写一部分是常态；具体形状由 `mergeRules()` 兜底校验。
+   */
+  rules?: unknown;
 }
 
 export interface CharacterAnchor {

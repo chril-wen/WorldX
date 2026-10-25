@@ -519,6 +519,9 @@ export class SimulationEngine {
   ): Promise<Map<string, TickIntent>> {
     const results = await Promise.allSettled(
       charIds.map(async (charId) => {
+        // 该角色生效的规则（世界级 + 角色级 override）
+        const rules = this.characterManager.getRulesFor(charId);
+
         const perception = buildPerception(
           charId,
           this.worldManager,
@@ -526,6 +529,8 @@ export class SimulationEngine {
           gameTime,
           this.storage.events,
           this.weatherManager.getWeatherState(),
+          rules.perception,
+          rules.emotion,
         );
 
         this.maybeGenerateObservationMemory(charId, perception, gameTime, events);
@@ -536,6 +541,7 @@ export class SimulationEngine {
           this.worldManager,
           this.characterManager,
           this.storage.events,
+          rules.action,
         );
         const rawDecision = await this.decisionMaker.makeDecision(
           charId,

@@ -481,12 +481,15 @@ function applyEmotionEffect(
 ): void {
   const state = characterManager.getState(charId);
   const normalized = normalizeEmotionEffect(effect.value);
+  // 用该角色生效的规则 —— 角色级 override 要在这里生效。
+  const rules = characterManager.getRulesFor(charId).emotion;
   const next = updateEmotion(
     {
       valence: state.emotionValence,
       arousal: state.emotionArousal,
     },
     normalized,
+    rules,
   );
   characterManager.updateState(charId, {
     emotionValence: next.valence,

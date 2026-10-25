@@ -17,6 +17,8 @@ import { setSceneConfig, isSceneComplete, getTicksPerScene } from "./time-helper
 import { isBlockedByWeather, WeatherManager } from "./weather-manager.js";
 import type { WorldConfigSource } from "../contracts/world-config.js";
 import type { SnapshotMeta, Storage } from "../contracts/storage.js";
+import { DEFAULT_RULES, mergeRules } from "./rules.js";
+import type { WorldRules } from "./rules.js";
 
 const DIALOGUE_SESSION_PREFIX = "dialogue_session:";
 const MAIN_AREA_DIALOGUE_MAX_GRAPH_STEPS = Math.max(
@@ -65,6 +67,8 @@ export class WorldManager {
   private weatherConfig: WorldConfig["weather"] = null;
   /** Rich world: hearsay enabled flag */
   private hearsayEnabled = false;
+  /** 世界规则 —— 从 world.json 的 rules 段加载，缺省用默认值。 */
+  private rules: WorldRules = DEFAULT_RULES;
 
   private config: WorldConfigSource;
   private storage: Storage;
@@ -114,6 +118,8 @@ export class WorldManager {
     }
     this.weatherConfig = config.weather ?? null;
     this.hearsayEnabled = config.hearsay?.enabled ?? false;
+    // 世界规则：world.json 的 rules 段只写要改的项，其余走默认。
+    this.rules = mergeRules((config as { rules?: unknown }).rules);
     const restoredTime = this.restorePersistedTime();
     this.syncSceneClock(restoredTime.day);
   }
@@ -148,6 +154,9 @@ export class WorldManager {
     // "Object not found"，所以这里必须补上。只补缺失的物件行，不动
     // current_day / weather 等运行时状态——那些正被模拟引擎使用。
     this.storage.worldState.initWorldState(this.locationConfigs, { onlyMissingObjects: true });
+    // 规则也要跟着重载 —— world.json 可能被外部改过规则
+    // （比如 `npm run rules -- set` 改完不重启 server）。
+    this.rules = mergeRules((config as { rules?: unknown }).rules);
   }
 
   /** Append a new location to world.json and reload in-memory configs. */
@@ -194,6 +203,33 @@ export class WorldManager {
 
   getSceneConfig(): SceneConfig {
     return this.sceneConfig;
+  }
+
+  /**
+   * 当前世界的规则。
+   *
+   * 这是**世界级**规则 —— 角色级 override 在
+   * `resolveRulesForCharacter()` 里叠加。
+   */
+  getRules(): WorldRules {
+    return this.rules;
+  }
+
+  /**
+   * 取某个角色实际生效的规则 = 世界规则 + 该角色的 override。
+   *
+   * 角色的 override 来自角色配置里的 `rules` 字段。
+   * **只覆盖它显式写了的项**，没写的继承世界级。
+   *
+   * @param characterRules 角色配置里的 rules 段（可能是 undefined）
+   * @param base 世界级规则 —— 缺省用当前世界的
+   */
+  resolveRulesForCharacter(
+    characterRules?: unknown,
+    base: WorldRules = this.rules,
+  ): WorldRules {
+    if (!characterRules) return base;
+    return mergeRules(characterRules, base);
   }
 
   applySceneConfigOverride(override: Partial<SceneConfig>): void {

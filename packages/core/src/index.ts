@@ -14,6 +14,23 @@ export { WorldManager } from "./engine/world-manager.js";
 export type { TickAdvanceResult, MainAreaZone } from "./engine/world-manager.js";
 export { CharacterManager } from "./engine/character-manager.js";
 
+export {
+  DEFAULT_RULES,
+  RULE_GROUPS,
+  cloneRules,
+  mergeRules,
+  validateRules,
+} from "./engine/rules.js";
+export type {
+  WorldRules,
+  RuleGroup,
+  EmotionRules,
+  NeedsRules,
+  MemoryRules,
+  PerceptionRules,
+  ActionRules,
+} from "./engine/rules.js";
+
 export { PromptBuilder } from "./llm/prompt-builder.js";
 export { LLMClient } from "./llm/llm-client.js";
 export * from "./llm/output-schemas.js";

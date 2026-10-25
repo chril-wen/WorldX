@@ -129,6 +129,21 @@ export interface WorldConfig {
   economics?: { items: ItemDefinition[] } | null;
   weather?: { preset: string; indoorDefault?: boolean } | null;
   hearsay?: { enabled: boolean } | null;
+
+  /**
+   * 世界规则 —— 决定这个世界「怎么运转」。
+   *
+   * **只写要改的项**，其余走默认值（`DEFAULT_RULES`）。
+   * 例：
+   * ```json
+   * { "rules": { "emotion": { "decayRate": 0.9 } } }
+   * ```
+   * 情绪消得更快 = 更理性冷静。
+   *
+   * 类型是 `unknown` —— 形状由 `mergeRules()` 兜底，
+   * 写错的键名会被忽略而不是当成有效规则。
+   */
+  rules?: unknown;
 }
 
 export interface ItemDefinition {

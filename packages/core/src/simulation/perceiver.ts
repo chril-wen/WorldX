@@ -2,6 +2,8 @@ import type { Perception, GameTime } from "../contracts/index.js";
 import type { WorldManager } from "../engine/world-manager.js";
 import type { CharacterManager } from "../engine/character-manager.js";
 import { getEmotionLabel } from "../engine/emotion-manager.js";
+import { DEFAULT_RULES } from "../engine/rules.js";
+import type { EmotionRules, PerceptionRules } from "../engine/rules.js";
 import {
   describeWeatherFor,
   resolveExposure,
@@ -16,6 +18,8 @@ export function buildPerception(
   gameTime: GameTime,
   eventStore: EventStorage,
   weatherState: WeatherState,
+  perceptionRules: PerceptionRules = DEFAULT_RULES.perception,
+  emotionRules: EmotionRules = DEFAULT_RULES.emotion,
 ): Perception {
   const state = characterManager.getState(charId);
   const location = worldManager.getLocation(state.location);
@@ -55,7 +59,9 @@ export function buildPerception(
     .filter((c) => c.profile.id !== charId)
     .map((c) => {
       const visiblyEmotional =
-        Math.abs(c.state.emotionValence) >= 2 || c.state.emotionArousal >= 7;
+        Math.abs(c.state.emotionValence) >=
+          perceptionRules.visibleValenceThreshold ||
+        c.state.emotionArousal >= perceptionRules.visibleArousalThreshold;
       const targetLocation =
         worldManager.getLocation(c.state.location)?.name ?? c.state.location;
       const zone =
@@ -70,7 +76,11 @@ export function buildPerception(
         locationId: c.state.location,
         locationName: targetLocation,
         emotionLabel: visiblyEmotional
-          ? getEmotionLabel(c.state.emotionValence, c.state.emotionArousal)
+          ? getEmotionLabel(
+              c.state.emotionValence,
+              c.state.emotionArousal,
+              emotionRules,
+            )
           : undefined,
         zone,
       };

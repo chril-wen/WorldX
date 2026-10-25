@@ -198,6 +198,9 @@ export function normalizeCharacterProfile(raw: any): CharacterProfile | null {
     anchor: normalizeAnchor(raw.anchor),
     iconicCues: normalizeIconicCues(raw.iconicCues),
     canonicalRefs: normalizeCanonicalRefs(raw.canonicalRefs),
+    // 角色级规则覆盖 —— 只写要改的项，其余继承世界级。
+    // 保留原样透传：形状由 core 的 mergeRules() 兜底校验。
+    rules: raw.rules,
   };
 }
 

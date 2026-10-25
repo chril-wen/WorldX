@@ -3,6 +3,8 @@ import type { MemoryStorage } from "../contracts/storage.js";
 import type { LLMClient } from "../contracts/llm-client.js";
 import { generateId } from "../utils/id-generator.js";
 import { absoluteTick } from "./time-helpers.js";
+import { DEFAULT_RULES } from "./rules.js";
+import type { MemoryRules } from "./rules.js";
 
 interface RetrievalWeights {
   relevance: number;
@@ -26,13 +28,69 @@ export class MemoryManager {
   private weights: RetrievalWeights;
   private cache = new Map<string, MemoryEntry[]>();
   private memoryStore: MemoryStorage;
+  private rules: MemoryRules;
+  /**
+   * 角色级规则解析器 —— 返回该角色实际生效的记忆规则。
+   *
+   * 为什么需要它：MemoryManager 是**所有角色共用**的，
+   * 但「某个角色记得特别短」是角色级规则。
+   * 所以规则不能是单一的一份，得按 characterId 解析。
+   */
+  private rulesResolver?: (characterId: string) => MemoryRules;
 
+  /**
+   * @param memoryStore 记忆存储
+   * @param weights 检索权重覆盖（留空则用规则里的权重）
+   * @param rules 默认记忆规则 —— 决定「记得住什么、忘得多快」
+   * @param rulesResolver 角色级规则解析器
+   */
   constructor(
     memoryStore: MemoryStorage,
     weights?: Partial<RetrievalWeights>,
+    rules: MemoryRules = DEFAULT_RULES.memory,
+    rulesResolver?: (characterId: string) => MemoryRules,
   ) {
     this.memoryStore = memoryStore;
-    this.weights = { ...DEFAULT_WEIGHTS, ...weights };
+    this.rules = rules;
+    this.rulesResolver = rulesResolver;
+    this.weights = {
+      relevance: weights?.relevance ?? rules.relevanceWeight,
+      recency: weights?.recency ?? rules.recencyWeight,
+      importance: weights?.importance ?? rules.importanceWeight,
+      emotionalIntensity:
+        weights?.emotionalIntensity ?? rules.emotionalIntensityWeight,
+    };
+  }
+
+  /** 当前生效的记忆规则（默认规则，不含角色级覆盖）。 */
+  getRules(): MemoryRules {
+    return this.rules;
+  }
+
+  /**
+   * 取某个角色生效的记忆规则。
+   *
+   * 没有配解析器时返回默认规则 —— 单测里直接 new MemoryManager(store) 就是这条。
+   */
+  getRulesFor(characterId: string): MemoryRules {
+    return this.rulesResolver?.(characterId) ?? this.rules;
+  }
+
+  /**
+   * 换一套默认记忆规则（世界级）。
+   *
+   * 换完必须清缓存 —— 缓存里存的是记忆条目本身（不含评分），
+   * 评分是每次检索现算的，所以条目缓存不用清，但检索结果的排序会变。
+   */
+  setRules(rules: MemoryRules): void {
+    this.rules = rules;
+    this.weights = {
+      relevance: rules.relevanceWeight,
+      recency: rules.recencyWeight,
+      importance: rules.importanceWeight,
+      emotionalIntensity: rules.emotionalIntensityWeight,
+    };
+    this.cache.clear();
   }
 
   setLLMClient(_client: LLMClient): void {
@@ -97,12 +155,14 @@ export class MemoryManager {
 
     const currentTotalTicks = absoluteTick(params.currentTime);
     const contextLower = params.contextKeywords.map((k) => k.toLowerCase());
+    const rules = this.getRulesFor(params.characterId);
 
     const scored = allMemories.map((memory) => {
       const score = this.computeScore(
         memory,
         currentTotalTicks,
         contextLower,
+        rules,
         params.relatedCharacterIds,
         params.relatedLocation,
       );
@@ -130,19 +190,29 @@ export class MemoryManager {
     const memories = this.memoryStore.getMemoriesByCharacter(characterId, {
       isLongTerm: false,
     });
+    const rules = this.getRulesFor(characterId);
 
     for (const m of memories) {
       const ageInDays = currentDay - m.gameDay;
       const effectiveStrength =
-        m.importance * m.decayFactor + m.accessCount * 0.5;
+        m.importance * m.decayFactor + m.accessCount * rules.accessStrengthBonus;
 
-      if (m.decayFactor < 0.1 && ageInDays > 7) {
+      if (
+        m.decayFactor < rules.deleteDecayFactor &&
+        ageInDays > rules.deleteAfterDays
+      ) {
         this.memoryStore.deleteMemory(m.id);
-      } else if (m.decayFactor < 0.3 && ageInDays > 3) {
+      } else if (
+        m.decayFactor < rules.fadeDecayFactor &&
+        ageInDays > rules.fadeAfterDays
+      ) {
         this.memoryStore.updateMemory(m.id, {
           tags: [...m.tags.filter((t) => t !== "faded"), "faded"],
         });
-      } else if (effectiveStrength < 3 && ageInDays > 5) {
+      } else if (
+        effectiveStrength < rules.faintStrengthThreshold &&
+        ageInDays > rules.faintAfterDays
+      ) {
         this.memoryStore.updateMemory(m.id, {
           tags: [...m.tags.filter((t) => t !== "faded"), "faded"],
         });
@@ -156,11 +226,15 @@ export class MemoryManager {
     const shortTermMemories = this.memoryStore.getMemoriesByCharacter(characterId, {
       isLongTerm: false,
     });
+    const rules = this.getRulesFor(characterId);
 
     for (const m of shortTermMemories) {
       if (m.tags.includes("faded")) continue;
 
-      if (m.importance >= 6 || m.accessCount >= 3) {
+      if (
+        m.importance >= rules.consolidateImportance ||
+        m.accessCount >= rules.consolidateAccessCount
+      ) {
         this.memoryStore.updateMemory(m.id, { isLongTerm: true });
       }
     }
@@ -222,12 +296,14 @@ export class MemoryManager {
     memory: MemoryEntry,
     currentTotalTicks: number,
     contextLower: string[],
+    rules: MemoryRules,
     relatedCharacterIds?: string[],
     relatedLocation?: string,
   ): number {
     const relevance = this.computeRelevance(
       memory,
       contextLower,
+      rules,
       relatedCharacterIds,
       relatedLocation,
     );
@@ -237,7 +313,7 @@ export class MemoryManager {
       tick: memory.gameTick,
     });
     const deltaTicks = Math.max(0, currentTotalTicks - memoryTotalTicks);
-    const recency = 1 / (1 + 0.05 * deltaTicks);
+    const recency = 1 / (1 + rules.recencyDecayRate * deltaTicks);
 
     const importance = memory.importance / 10;
     const emotionalIntensity = memory.emotionalIntensity / 10;
@@ -253,6 +329,7 @@ export class MemoryManager {
   private computeRelevance(
     memory: MemoryEntry,
     contextLower: string[],
+    rules: MemoryRules,
     relatedCharacterIds?: string[],
     relatedLocation?: string,
   ): number {
@@ -264,10 +341,10 @@ export class MemoryManager {
       relatedCharacterIds &&
       memory.relatedCharacters.some((c) => relatedCharacterIds.includes(c))
     ) {
-      bonus += 0.3;
+      bonus += rules.relatedCharacterBonus;
     }
     if (relatedLocation && memory.relatedLocation === relatedLocation) {
-      bonus += 0.2;
+      bonus += rules.relatedLocationBonus;
     }
 
     return Math.min(1, semanticScore + bonus);

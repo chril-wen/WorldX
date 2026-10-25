@@ -12,6 +12,7 @@ import { generateId } from "../utils/id-generator.js";
 import { MemoryManager } from "./memory-manager.js";
 import { decayNeeds } from "./needs-manager.js";
 import { decayEmotion } from "./emotion-manager.js";
+import type { WorldRules } from "./rules.js";
 
 export class CharacterManager {
   memoryManager: MemoryManager;
@@ -27,7 +28,24 @@ export class CharacterManager {
   ) {
     this.storage = storage;
     this.config = config;
-    this.memoryManager = new MemoryManager(this.storage.memories);
+    // 记忆规则按角色解析 —— 「某个角色记得特别短」是角色级规则，
+    // 而 MemoryManager 是所有角色共用的。
+    this.memoryManager = new MemoryManager(
+      this.storage.memories,
+      undefined,
+      this.worldManager.getRules().memory,
+      (characterId) => this.getRulesFor(characterId).memory,
+    );
+  }
+
+  /**
+   * 某个角色实际生效的规则 = 世界规则 + 该角色的 override。
+   *
+   * 角色配置里的 `rules` 段只写要改的项，没写的继承世界级。
+   */
+  getRulesFor(charId: string): WorldRules {
+    const profile = this.profiles.get(charId);
+    return this.worldManager.resolveRulesForCharacter(profile?.rules);
   }
 
   initialize(): void {
@@ -258,12 +276,16 @@ export class CharacterManager {
   tickPassiveUpdate(charId: string, currentTime: GameTime): SimulationEvent[] {
     const state = this.getState(charId);
     const profile = this.getProfile(charId);
+    const rules = this.getRulesFor(charId);
 
-    const needsPatch = decayNeeds(state, profile, currentTime.tick);
-    const emotionResult = decayEmotion({
-      valence: state.emotionValence,
-      arousal: state.emotionArousal,
-    });
+    const needsPatch = decayNeeds(state, profile, currentTime.tick, rules.needs);
+    const emotionResult = decayEmotion(
+      {
+        valence: state.emotionValence,
+        arousal: state.emotionArousal,
+      },
+      rules.emotion,
+    );
 
     const fullPatch: Partial<CharacterState> = {
       ...needsPatch,
