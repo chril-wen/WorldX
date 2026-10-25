@@ -1,3 +1,9 @@
+/**
+ * 每格边长（像素）。
+ *
+ * 地图数据层在 `@worldx/client-core`，那边用的是 `DEFAULT_TILE_SIZE`
+ * （同一个值 32）。这里保留是为了 client 自己的代码读起来顺。
+ */
 export const TILE_SIZE = 32;
 
 /**
@@ -5,11 +11,14 @@ export const TILE_SIZE = 32;
  *
  * 角色在里面用 `mainAreaPointId` 点位寻址。
  *
- * 跟 core 的 `DEFAULT_CENTER_LOCATION_ID` 是同一个值。
+ * **这一份是从 core re-export 的** —— 改造前 client 和 core 各定义一次，
+ * 值相同，注释里还互相声明「是同一个值」。阶段 4 刚处理过同一类问题
+ * （两份逐字重复的 `normalizeLocations`），再留一份就是在复发。
+ *
  * 真正的值从 `/world/info` 的 `centerLocationId` 来 ——
  * 旧世界都叫 "main_area"，所以默认值让行为跟之前完全一致。
  */
-export const DEFAULT_CENTER_LOCATION_ID = "main_area";
+export { DEFAULT_CENTER_LOCATION_ID } from "@worldx/client-core";
 
 export const SPRITE_FRAME_WIDTH = 170;
 export const SPRITE_FRAME_HEIGHT = 204;

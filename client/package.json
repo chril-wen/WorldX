@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.99.0",
-    "easystarjs": "^0.4.4",
     "i18next": "^26.0.6",
     "phaser": "^3.87.0",
     "react": "^19.1.0",

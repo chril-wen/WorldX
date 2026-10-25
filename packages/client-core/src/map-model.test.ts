@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { MapManager } from "./MapManager";
+import { MapManager } from "./map-model.js";
 
 /**
  * 造一个最小可用的 Tiled JSON：
