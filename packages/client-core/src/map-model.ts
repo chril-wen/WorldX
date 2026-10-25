@@ -1,11 +1,11 @@
 import { DEFAULT_CENTER_LOCATION_ID } from "@worldx/core";
-import type { MainAreaPointInfo } from "./types.js";
 import {
   DEFAULT_TILE_SIZE,
   parseTmj,
   toInteractiveObjects,
   toLocationRects,
-} from "./tmj-parser.js";
+} from "@worldx/core";
+import type { MainAreaPointInfo } from "./types.js";
 import type { InteractiveObject, LocationRect, MainAreaPointNode } from "./types.js";
 
 export type { InteractiveObject, LocationRect, MainAreaPointNode };

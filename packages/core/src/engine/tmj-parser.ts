@@ -1,6 +1,19 @@
 /**
  * TMJ 解析 —— 全仓唯一的地图解析实现。
  *
+ * ## 为什么在 core 里，不在 client-core 里
+ *
+ * 因为**core 本身就在读 TMJ**：
+ *
+ * - `engine/world-manager.ts` 的 `rebuildMainAreaPointAdjacencyFromTmj()`
+ *   读 collision 层，重建主区域点位的邻接关系
+ * - `engine/world-manager.ts` 的 `inferWorldSizeFromWorldDir()` 读地图尺寸
+ *
+ * 解析器放 client-core 的话，core 就得依赖 client-core，
+ * 而 client-core 又依赖 core（为了 `MainAreaPointConfig`）—— **成环**。
+ *
+ * 放 core 里则依赖方向是单向的：core ← client-core。
+ *
  * ## 为什么要有这一份
  *
  * 改造前，TMJ（`06-final.tmj`）的解析在全仓有**四份独立实现**：
@@ -34,10 +47,14 @@
  * 由调用方各自决定 —— **改兜底规则要改调用方，不改这里**。
  */
 
-import type { PixelPoint } from "./types.js";
+/** 像素坐标 —— 解析器内部的最小表示，不进 contracts */
+interface PixelPoint {
+  x: number;
+  y: number;
+}
 
 /** Tiled 的一层 —— 这里只列我们真正会读的字段。 */
-interface TmjLayer {
+export interface TmjLayer {
   name?: string;
   type?: string;
   data?: unknown;
@@ -45,6 +62,28 @@ interface TmjLayer {
   image?: string;
   imagewidth?: number;
   imageheight?: number;
+}
+
+/**
+ * 按名字找一层。
+ *
+ * ## 为什么需要这个
+ *
+ * orchestrator（`.mjs`）里到处是 `tmj.layers.find((l) => l.name === "regions")`
+ * —— 「层名」这个字符串散落在全仓各处，没有任何类型保证它们一致。
+ *
+ * 这里把查找收敛到一处。**返回原始 layer 对象**，不是解析结果 ——
+ * 因为 orchestrator 的下游（`main-area-points.mjs` 等）要的是原始形状。
+ */
+export function findTmjLayer(tmj: unknown, name: string, type?: string): TmjLayer | null {
+  const source = (tmj && typeof tmj === "object" ? tmj : {}) as { layers?: unknown };
+  const layers: TmjLayer[] = Array.isArray(source.layers) ? (source.layers as TmjLayer[]) : [];
+  for (const layer of layers) {
+    if (layer?.name !== name) continue;
+    if (type && layer.type !== type) continue;
+    return layer;
+  }
+  return null;
 }
 
 /** Tiled 的一个对象（区域或可交互物件） */
@@ -75,8 +114,23 @@ export interface ParsedTmj {
   width: number;
   /** 网格高（格） */
   height: number;
-  /** 每格边长（像素） */
+  /**
+   * 每格边长（像素）。
+   *
+   * TMJ 没写 `tilewidth` 时用 `DEFAULT_TILE_SIZE`。
+   */
   tileSize: number;
+  /**
+   * TMJ **显式写了** `tilewidth` 吗？
+   *
+   * 为什么需要这个标志：各调用方对「tilewidth 缺失」的处理**不一样** ——
+   *
+   * - client 的 `MapManager`：用默认值 32，继续
+   * - core 的 `world-manager.ts`：**放弃**重建点位邻接（保守，怕算错）
+   *
+   * 解析层不能替它们选一边 —— 所以把事实暴露出来，让调用方自己判断。
+   */
+  hasTileWidth: boolean;
   /**
    * collision 网格 —— `0` = 可走，非 0 = 阻挡。
    *
@@ -177,7 +231,8 @@ export function parseTmj(tmj: unknown): ParsedTmj {
 
   const width = Number(source.width) || 0;
   const height = Number(source.height) || 0;
-  const tileSize = Number(source.tilewidth) || DEFAULT_TILE_SIZE;
+  const hasTileWidth = Number.isFinite(Number(source.tilewidth)) && Number(source.tilewidth) > 0;
+  const tileSize = hasTileWidth ? Number(source.tilewidth) : DEFAULT_TILE_SIZE;
   const layers: TmjLayer[] = Array.isArray(source.layers)
     ? (source.layers as TmjLayer[])
     : [];
@@ -219,6 +274,7 @@ export function parseTmj(tmj: unknown): ParsedTmj {
     width,
     height,
     tileSize,
+    hasTileWidth,
     collisionGrid,
     collisionData,
     regions,

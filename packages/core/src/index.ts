@@ -15,6 +15,26 @@ export {
 export { migrateWorldConfig } from "./engine/world-migration.js";
 export { normalizeLocations } from "./engine/location-normalizer.js";
 
+/**
+ * TMJ 解析 —— 全仓唯一的一份。
+ *
+ * 改造前有四份独立实现（client / core / orchestrator × 2），
+ * 彼此之间只靠「文件名 + 层名」两个字符串约定，没有任何类型或校验。
+ */
+export {
+  DEFAULT_TILE_SIZE,
+  parseTmj,
+  toInteractiveObjects,
+  toLocationRects,
+  gridToPixel,
+  pixelToGrid,
+} from "./engine/tmj-parser.js";
+export type {
+  ParsedTmj,
+  TmjBackground,
+  TmjObject,
+} from "./engine/tmj-parser.js";
+
 export { updateEmotion, decayEmotion, getEmotionLabel } from "./engine/emotion-manager.js";
 export { decayNeeds } from "./engine/needs-manager.js";
 export { MemoryManager } from "./engine/memory-manager.js";

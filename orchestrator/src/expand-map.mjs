@@ -37,9 +37,71 @@ import {
   EXPANSION_GEOMETRY,
 } from "./map-tile-generator.mjs";
 import { buildMainAreaPoints } from "./main-area-points.mjs";
+import { pathToFileURL } from "url";
+
+/**
+ * 加载 core 的 TMJ 解析器 —— 全仓唯一的一份。
+ *
+ * 改造前 expand-map 自己写了一遍 `tmj.layers.find(...)`（6 处），
+ * config-generator 写了一遍（3 处），core 写了一遍（2 处），
+ * client 写了一遍（3 处）—— 共四份，靠「文件名 + 层名」两个字符串约定。
+ *
+ * ## 为什么用顶层 await
+ *
+ * `mergeTMJIncremental` / `resizeCollisionGrid` / `rebuildMainAreaPoints`
+ * 是**导出的同步函数** —— 改成 async 会破坏 API，也破坏
+ * `expand-map.selfcheck.test.ts` 的调用方式。
+ *
+ * ESM 的顶层 await 让模块加载时就把解析器拿到手，
+ * 之后这三个同步函数就能直接调用 —— 不用改它们的签名。
+ *
+ * ## 为什么走 core 源码而不是 dist
+ *
+ * 跟 `config-generator.mjs` / `repair-world-locations.mjs` 一致：
+ * 走 tsx 吃**源码**，跟 vitest、跟生成流程走的是同一份逻辑，
+ * 不用先 build core，也不会用到旧的 dist。
+ */
+const { findTmjLayer } = await (async () => {
+  const corePath = join(
+    __dirname,
+    "..",
+    "..",
+    "packages",
+    "core",
+    "src",
+    "engine",
+    "tmj-parser.ts",
+  );
+  try {
+    const { tsImport } = await import("tsx/esm/api");
+    return await tsImport(pathToFileURL(corePath).href, import.meta.url);
+  } catch (err) {
+    throw new Error(
+      `[ExpandMap] 加载 core 的 TMJ 解析器失败（${corePath}）：${err?.message ?? err}`,
+    );
+  }
+})();
 
 /** 新地图块在扩展方向上的厚度（像素） */
 const TILE_EXTENT = 640;
+
+/**
+ * 把 Tiled 对象的 properties 摊平成普通对象。
+ *
+ * 改造前这里有 4 处一模一样的 `(obj.properties || []).find((p) => p.name === "x")?.value`
+ * —— 每次都要重新遍历一遍数组。
+ *
+ * **兜底规则保持原样**（`|| obj.name` 之类）——
+ * 生成期要尽量不丢数据，跟 client 的「没有 id 就跳过」不同。
+ * 那种差异是**有意义的**，所以不改。
+ */
+function getTmjObjectProperties(obj) {
+  const props = {};
+  for (const p of obj?.properties || []) {
+    props[p.name] = p.value;
+  }
+  return props;
+}
 
 /**
  * 扩展方向。
@@ -68,25 +130,31 @@ export async function expandMap(worldDir, userPrompt, options = {}) {
   }
   const tmj = JSON.parse(readFileSync(tmjPath, "utf-8"));
 
-  const regionsLayer = tmj.layers.find((l) => l.name === "regions");
-  const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
-  const collisionLayer = tmj.layers.find((l) => l.name === "collision");
+  const regionsLayer = findTmjLayer(tmj, "regions");
+  const objectsLayer = findTmjLayer(tmj, "interactive_objects");
+  const collisionLayer = findTmjLayer(tmj, "collision");
 
-  let existingRegions = (regionsLayer?.objects || []).map((obj) => ({
-    id: obj.properties?.find((p) => p.name === "id")?.value || obj.name,
-    name: obj.name,
-    description: obj.properties?.find((p) => p.name === "description")?.value || "",
-    type: obj.properties?.find((p) => p.name === "regionType")?.value || "",
-    topLeft: { x: obj.x, y: obj.y },
-    bottomRight: { x: obj.x + obj.width, y: obj.y + obj.height },
-  }));
+  let existingRegions = (regionsLayer?.objects || []).map((obj) => {
+    const props = getTmjObjectProperties(obj);
+    return {
+      id: props.id || obj.name,
+      name: obj.name,
+      description: props.description || "",
+      type: props.regionType || "",
+      topLeft: { x: obj.x, y: obj.y },
+      bottomRight: { x: obj.x + obj.width, y: obj.y + obj.height },
+    };
+  });
 
-  const existingObjects = (objectsLayer?.objects || []).map((obj) => ({
-    id: obj.properties?.find((p) => p.name === "objectId")?.value || obj.name,
-    name: obj.name,
-    topLeft: { x: obj.x, y: obj.y },
-    bottomRight: { x: obj.x + obj.width, y: obj.y + obj.height },
-  }));
+  const existingObjects = (objectsLayer?.objects || []).map((obj) => {
+    const props = getTmjObjectProperties(obj);
+    return {
+      id: props.objectId || obj.name,
+      name: obj.name,
+      topLeft: { x: obj.x, y: obj.y },
+      bottomRight: { x: obj.x + obj.width, y: obj.y + obj.height },
+    };
+  });
 
   // ── 2. 读取 world.json ────────────────────────────────────────────────────
   const worldConfigPath = join(configDir, "world.json");
@@ -281,7 +349,7 @@ export async function expandMap(worldDir, userPrompt, options = {}) {
     );
     tmj.width = newGridW;
     tmj.height = newGridH;
-    const bgLayer = tmj.layers.find((l) => l.name === "background");
+    const bgLayer = findTmjLayer(tmj, "background");
     if (bgLayer) {
       bgLayer.imagewidth = newMeta.width;
       bgLayer.imageheight = newMeta.height;
@@ -1001,9 +1069,9 @@ export function reconcileDesignedItems(
  * @param {number} shiftY - 旧对象要平移的 y 像素（向上扩展时为正）
  */
 export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY = 0) {
-  const regionsLayer = tmj.layers.find((l) => l.name === "regions");
-  const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
-  const collisionLayer = tmj.layers.find((l) => l.name === "collision");
+  const regionsLayer = findTmjLayer(tmj, "regions");
+  const objectsLayer = findTmjLayer(tmj, "interactive_objects");
+  const collisionLayer = findTmjLayer(tmj, "collision");
 
   // ── 平移旧对象 ─────────────────────────────────────────────────────────────
   if (shiftX !== 0 || shiftY !== 0) {
@@ -1038,7 +1106,7 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
   const existingRegionIds = new Set();
   const existingRegionBoxes = new Set();
   for (const obj of regionsLayer?.objects || []) {
-    const propId = (obj.properties || []).find((p) => p.name === "id")?.value;
+    const propId = getTmjObjectProperties(obj).id;
     if (propId) existingRegionIds.add(propId);
     existingRegionBoxes.add(obj.x + "," + obj.y + "," + obj.width + "x" + obj.height);
   }
@@ -1156,7 +1224,7 @@ export function mergeTMJIncremental(tmj, parsed, newObjects, shiftX = 0, shiftY 
  * @param {number} offsetY - 旧网格在新网格中的 y 偏移（格）
  */
 export function resizeCollisionGrid(tmj, oldW, oldH, newW, newH, offsetX = 0, offsetY = 0) {
-  const layer = tmj.layers.find((l) => l.name === "collision");
+  const layer = findTmjLayer(tmj, "collision");
   if (!layer?.data) return;
   const oldData = layer.data;
   // 新增出来的格子默认是障碍（1），引导玩家走新区域
@@ -1271,9 +1339,9 @@ export function updateWorldConfig(
  *   - 服务端还依赖 name 字段做展示
  */
 export function rebuildMainAreaPoints(tmj) {
-  const collisionLayer = tmj.layers.find((l) => l.name === "collision");
-  const regionsLayer = tmj.layers.find((l) => l.name === "regions");
-  const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
+  const collisionLayer = findTmjLayer(tmj, "collision");
+  const regionsLayer = findTmjLayer(tmj, "regions");
+  const objectsLayer = findTmjLayer(tmj, "interactive_objects");
 
   const tmjRegions = regionsLayer?.objects || [];
   const tmjObjects = objectsLayer?.objects || [];

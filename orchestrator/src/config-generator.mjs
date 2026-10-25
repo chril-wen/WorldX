@@ -97,16 +97,21 @@ async function loadCoreLocations() {
   const coreDir = join(__dirname, "..", "..", "packages", "core", "src");
   const corePath = join(coreDir, "engine", "location-normalizer.ts");
   const contractsPath = join(coreDir, "contracts", "world.ts");
+  // TMJ 解析器 —— 全仓唯一的一份（改造前 core / client / orchestrator 各写各的）。
+  const tmjParserPath = join(coreDir, "engine", "tmj-parser.ts");
   try {
     const { tsImport } = await import("tsx/esm/api");
-    const [locations, contracts] = await Promise.all([
+    const [locations, contracts, tmjParser] = await Promise.all([
       tsImport(pathToFileURL(corePath).href, import.meta.url),
       tsImport(pathToFileURL(contractsPath).href, import.meta.url),
+      tsImport(pathToFileURL(tmjParserPath).href, import.meta.url),
     ]);
     coreLocationsCache = {
       normalizeLocations: locations.normalizeLocations,
       WORLD_SCHEMA_VERSION: contracts.WORLD_SCHEMA_VERSION,
       DEFAULT_CENTER_LOCATION_ID: contracts.DEFAULT_CENTER_LOCATION_ID,
+      findTmjLayer: tmjParser.findTmjLayer,
+      parseTmj: tmjParser.parseTmj,
     };
   } catch (err) {
     throw new Error(
@@ -162,7 +167,8 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
   // 规则在写盘前规范化 —— world.json 存的必须是实际在跑的值。
   const worldRules = await normalizeRulesForWrite(normalizedDesign.rules);
   // schema 版本号跟 core 一致 —— 从 core 取，不写死。
-  const { WORLD_SCHEMA_VERSION } = await loadCoreLocations();
+  // TMJ 解析器也从 core 取 —— 全仓唯一的一份。
+  const { WORLD_SCHEMA_VERSION, findTmjLayer } = await loadCoreLocations();
   const originalPrompt =
     typeof options.originalPrompt === "string" && options.originalPrompt.trim()
       ? options.originalPrompt.trim()
@@ -173,9 +179,11 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
 
   const tmjPath = join(mapDir, "06-final.tmj");
   const tmj = JSON.parse(readFileSync(tmjPath, "utf-8"));
-  const regionsLayer = tmj.layers.find((l) => l.name === "regions");
-  const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
-  const collisionLayer = tmj.layers.find((l) => l.name === "collision");
+  // 层查找收敛到 core 的解析器 —— 改造前这里自己写了一遍 `.layers.find(...)`。
+  // 拿到的是**原始 layer 对象**（下游 `buildMainAreaPoints` 要原始形状）。
+  const regionsLayer = findTmjLayer(tmj, "regions");
+  const objectsLayer = findTmjLayer(tmj, "interactive_objects");
+  const collisionLayer = findTmjLayer(tmj, "collision");
 
   const tmjRegions = regionsLayer?.objects || [];
   const tmjObjects = objectsLayer?.objects || [];
@@ -868,10 +876,7 @@ function findStartPositions(collisionData, gridWidth, gridHeight, tileSize, regi
           py >= region.y &&
           py <= region.y + (region.height || 0)
         ) {
-          const props = {};
-          (region.properties || []).forEach((p) => {
-            props[p.name] = p.value;
-          });
+          const props = getObjectProperties(region);
           locationId =
             props.id || region.name?.toLowerCase().replace(/\s+/g, "_") || locationId;
           break;
@@ -943,8 +948,7 @@ function getLargestWalkableComponent(collisionData, gridWidth, gridHeight) {
 function resolveAnchoredStartPosition(anchor, tmjRegions, tmjObjects, collisionData, gridWidth, gridHeight, tileSize, mainAreaPoints) {
   if (anchor.type === "region") {
     const region = tmjRegions.find((r) => {
-      const props = {};
-      (r.properties || []).forEach((p) => { props[p.name] = p.value; });
+      const props = getObjectProperties(r);
       return props.id === anchor.targetId || r.name?.toLowerCase().replace(/\s+/g, "_") === anchor.targetId;
     });
     if (region) {
@@ -980,8 +984,7 @@ function resolveAnchoredStartPosition(anchor, tmjRegions, tmjObjects, collisionD
     }
     // Fallback: find element in TMJ objects, place outside its bounding box
     const obj = tmjObjects.find((o) => {
-      const props = {};
-      (o.properties || []).forEach((p) => { props[p.name] = p.value; });
+      const props = getObjectProperties(o);
       return props.objectId === anchor.targetId;
     });
     if (obj) {

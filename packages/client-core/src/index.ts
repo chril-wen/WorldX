@@ -36,6 +36,14 @@ export {
   PathfindingManager,
 } from "./pathfinding.js";
 
+/**
+ * TMJ 解析在 `@worldx/core` —— core 本身就在读 TMJ
+ * （`world-manager.ts` 重建点位邻接、推断地图尺寸），
+ * 解析器放 client-core 会让依赖成环。
+ *
+ * 这里 re-export 出来，是因为 client 用它读地图 —— 它属于「地图数据层」
+ * 的对外接口的一部分。
+ */
 export {
   DEFAULT_TILE_SIZE,
   parseTmj,
@@ -43,12 +51,12 @@ export {
   toLocationRects,
   gridToPixel,
   pixelToGrid,
-} from "./tmj-parser.js";
+} from "@worldx/core";
 export type {
   ParsedTmj,
   TmjBackground,
   TmjObject,
-} from "./tmj-parser.js";
+} from "@worldx/core";
 
 export type {
   GridPoint,

@@ -30,6 +30,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * 走 tsx 吃 core **源码** —— 跟 vitest、跟 config-generator 走的是同一份逻辑，
  * 不用先 build core，也不会用到旧的 dist。
  */
+
+/**
+ * core 的 TMJ 层查找 —— 由 `loadMigrate()` 填充。
+ *
+ * 声明必须在 `loadMigrate` **之前** —— 否则赋值那一行会撞上 TDZ。
+ */
+let findTmjLayer = null;
+
 let migrateCache;
 async function loadMigrate() {
   if (migrateCache !== undefined) return migrateCache;
@@ -43,10 +51,25 @@ async function loadMigrate() {
     "engine",
     "world-migration.ts",
   );
+  const tmjParserPath = join(
+    __dirname,
+    "..",
+    "..",
+    "packages",
+    "core",
+    "src",
+    "engine",
+    "tmj-parser.ts",
+  );
   try {
     const { tsImport } = await import("tsx/esm/api");
-    const mod = await tsImport(pathToFileURL(corePath).href, import.meta.url);
+    const [mod, tmjParser] = await Promise.all([
+      tsImport(pathToFileURL(corePath).href, import.meta.url),
+      tsImport(pathToFileURL(tmjParserPath).href, import.meta.url),
+    ]);
     migrateCache = mod.migrateWorldConfig;
+    // TMJ 解析器 —— 全仓唯一的一份（改造前这里也自己写了一遍层查找）。
+    findTmjLayer = tmjParser.findTmjLayer;
   } catch (err) {
     throw new Error(
       `[Repair] 加载 core 的迁移函数失败（${corePath}）：${err?.message ?? err}`,
@@ -54,6 +77,7 @@ async function loadMigrate() {
   }
   return migrateCache;
 }
+
 
 function readJSON(path) {
   return JSON.parse(readFileSync(path, "utf-8"));
@@ -85,8 +109,8 @@ export async function repairWorld(worldDir, { dryRun = false } = {}) {
   const centerLocationId = worldConfig.centerLocationId;
 
   const notes = [];
-  const regionsLayer = tmj.layers.find((l) => l.name === "regions");
-  const objectsLayer = tmj.layers.find((l) => l.name === "interactive_objects");
+  const regionsLayer = findTmjLayer(tmj, "regions");
+  const objectsLayer = findTmjLayer(tmj, "interactive_objects");
   const tmjRegions = regionsLayer?.objects || [];
   const tmjObjects = objectsLayer?.objects || [];
 
@@ -173,7 +197,7 @@ export async function repairWorld(worldDir, { dryRun = false } = {}) {
   }
 
   // ── 4. 重建主区域点位（命名 + 邻接关系） ───────────────────────────────────
-  const collisionLayer = tmj.layers.find((l) => l.name === "collision");
+  const collisionLayer = findTmjLayer(tmj, "collision");
   const points = buildMainAreaPoints({
     tmj,
     collisionLayer,

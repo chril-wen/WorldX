@@ -16,6 +16,7 @@ import type {
 import { setSceneConfig, isSceneComplete, getTicksPerScene } from "./time-helpers.js";
 import { isBlockedByWeather, WeatherManager } from "./weather-manager.js";
 import { normalizeLocations } from "./location-normalizer.js";
+import { parseTmj } from "./tmj-parser.js";
 import { DEFAULT_CENTER_LOCATION_ID } from "../contracts/world.js";
 import type { WorldConfigSource } from "../contracts/world-config.js";
 import type { SnapshotMeta, Storage } from "../contracts/storage.js";
@@ -820,21 +821,18 @@ function rebuildMainAreaPointAdjacencyFromTmj(
 
   try {
     const raw = fs.readFileSync(tmjPath, "utf-8");
-    const tmj = JSON.parse(raw) as {
-      width?: number;
-      height?: number;
-      tilewidth?: number;
-      layers?: Array<{ name?: string; data?: unknown }>;
-    };
-    const gridWidth = Number(tmj.width);
-    const gridHeight = Number(tmj.height);
-    const tileSize = Number(tmj.tilewidth);
-    const collisionData = tmj.layers?.find((layer) => layer.name === "collision")?.data;
+    // 解析交给全仓唯一的 tmj-parser ——
+    // 改造前这里自己解析一遍，跟 client 的 MapManager 各写各的。
+    const parsed = parseTmj(JSON.parse(raw));
+    const { width: gridWidth, height: gridHeight, tileSize } = parsed;
+    const collisionData = parsed.collisionData;
 
+    // 保守条件跟改造前一致：尺寸缺失、tilewidth 缺失、collision 层缺失
+    // 或长度对不上，都**放弃重建**（宁可不重建，也别按错误的格子尺寸算错邻接）。
     if (
-      !Number.isFinite(gridWidth) ||
-      !Number.isFinite(gridHeight) ||
-      !Number.isFinite(tileSize) ||
+      gridWidth <= 0 ||
+      gridHeight <= 0 ||
+      !parsed.hasTileWidth ||
       !Array.isArray(collisionData) ||
       collisionData.length !== gridWidth * gridHeight
     ) {
@@ -1056,21 +1054,17 @@ function inferWorldSizeFromWorldDir(worldDir: string | null): WorldSizeConfig | 
 
   try {
     const raw = fs.readFileSync(tmjPath, "utf-8");
-    const tmj = JSON.parse(raw) as {
-      width?: number;
-      height?: number;
-      tilewidth?: number;
-    };
-    if (
-      !Number.isFinite(tmj.width) ||
-      !Number.isFinite(tmj.height) ||
-      !Number.isFinite(tmj.tilewidth)
-    ) {
+    // 同一个解析器 —— 改造前这里又自己解析了一遍 TMJ。
+    const parsed = parseTmj(JSON.parse(raw));
+    const gridWidth = parsed.width;
+    const gridHeight = parsed.height;
+    const tileSize = parsed.tileSize;
+
+    // 尺寸缺失就放弃 —— 跟改造前一致（`!Number.isFinite(tmj.width)` 那种）。
+    if (gridWidth <= 0 || gridHeight <= 0 || !parsed.hasTileWidth) {
       return null;
     }
-    const gridWidth = Number(tmj.width);
-    const gridHeight = Number(tmj.height);
-    const tileSize = Number(tmj.tilewidth);
+
     return {
       width: gridWidth * tileSize,
       height: gridHeight * tileSize,
