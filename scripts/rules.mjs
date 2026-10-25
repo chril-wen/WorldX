@@ -10,6 +10,7 @@
  *   npm run rules -- reset [<path>] [--world <worldId>]
  *   npm run rules -- reset <characterId> [<path>] [--world <worldId>]
  *   npm run rules -- list [--world <worldId>]
+ *   npm run rules -- design-keys
  *
  * 路径写法：`emotion.decayRate`、`memory.recencyDecayRate`。
  * 角色级 override 前面加角色 id：`wang_damai emotion.decayRate 0.8`。
@@ -436,6 +437,60 @@ async function cmdList() {
   }
 }
 
+/**
+ * 打印世界设计可用的规则键（白名单）—— 提示词里那份清单的**来源**。
+ *
+ * ## 为什么有这个命令
+ *
+ * `prompts/world-creation.md` 里列的规则名以前是手写的，
+ * 跟 core 的 `DEFAULT_RULES` 各维护一份。必然漂移，而且漂得隐蔽：
+ * 少一个键，LLM 用不上那个旋钮；多一个（拼错的）键，
+ * `mergeRules` 静默忽略，LLM 以为改了规则其实没改。
+ *
+ * 现在白名单是 core 里的**数据**（`WORLD_DESIGN_RULE_KEYS`），
+ * 这个命令把它打出来 —— 加了新规则之后，
+ * 照着输出改提示词就行，不用自己回忆有哪些。
+ *
+ * ## 注意
+ *
+ * 提示词里每个键还带一句「这个旋钮拧了会怎样」的说明。
+ * 那部分**是手写的**，工具生成不了 —— 但**键名和默认值**能。
+ */
+async function cmdDesignKeys() {
+  const core = await loadCoreRules();
+
+  const issues = core.validateWorldDesignRuleKeys?.() ?? [];
+  if (issues.length > 0) {
+    console.error("白名单有问题：");
+    for (const i of issues) console.error(`  ❌ ${i}`);
+    process.exit(1);
+  }
+
+  console.log("世界设计可用的规则（提示词清单的来源）：\n");
+  for (const group of core.RULE_GROUPS) {
+    const keys = core.WORLD_DESIGN_RULE_KEYS[group] ?? [];
+    const defs = core.DEFAULT_RULES[group];
+    console.log(`【${group}】`);
+    for (const key of keys) {
+      console.log(`  ${key}（默认 ${defs[key]}）`);
+    }
+    console.log("");
+  }
+
+  const total = Object.values(core.WORLD_DESIGN_RULE_KEYS).reduce(
+    (n, ks) => n + ks.length,
+    0,
+  );
+  const all = Object.values(core.DEFAULT_RULES).reduce(
+    (n, g) => n + Object.keys(g).length,
+    0,
+  );
+  console.log(`白名单 ${total} 个 / 全部 ${all} 个`);
+  console.log(
+    "（白名单外的键是引擎内部细节或取值范围，不给 LLM —— 见 rules.ts 的注释）",
+  );
+}
+
 function findCharacterFile(worldDir, charIdOrName) {
   const dir = charactersDir(worldDir);
   if (!dir) return null;
@@ -464,11 +519,12 @@ const COMMANDS = {
   set: cmdSet,
   reset: cmdReset,
   list: cmdList,
+  "design-keys": cmdDesignKeys,
 };
 
 const command = args[0];
 if (!command || !COMMANDS[command]) {
-  console.error("用法：npm run rules -- <show|set|reset|list> ...");
+  console.error("用法：npm run rules -- <show|set|reset|list|design-keys> ...");
   console.error("");
   console.error("  show                              列出当前世界的规则");
   console.error("  show <characterId>                列出某角色生效的规则");
@@ -477,6 +533,7 @@ if (!command || !COMMANDS[command]) {
   console.error("  reset [<path>]                    重置世界规则（不写路径 = 全部重置）");
   console.error("  reset <characterId> [<path>]      重置角色级 override");
   console.error("  list                              列出所有可用规则和默认值");
+  console.error("  design-keys                       列出世界设计可用的规则（提示词清单的来源）");
   console.error("");
   console.error("通用选项：--world <worldId>");
   process.exit(1);

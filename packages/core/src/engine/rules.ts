@@ -379,6 +379,93 @@ export const RULE_GROUPS: RuleGroup[] = [
 ];
 
 /**
+ * **世界设计可用的**规则键 —— 白名单。
+ *
+ * ## 为什么有这份白名单
+ *
+ * 设计流程的提示词（`prompts/world-creation.md`）里要列出可用的规则名。
+ * 那份清单以前是**手写**的，跟这里的 `DEFAULT_RULES` 各维护一份。
+ *
+ * 两份东西必然漂移 —— 而且漂移的方向很隐蔽：
+ * 提示词里漏一个键，LLM 就永远用不上那个旋钮；
+ * 提示词里多一个键（拼错的），`mergeRules` 会**静默忽略**它，
+ * LLM 以为自己改了规则，其实什么都没发生。
+ *
+ * 所以把「哪些键是给世界设计用的」变成**这里的数据**，
+ * 提示词的清单从它生成，测试也从它校验。
+ *
+ * ## 白名单外的键是什么
+ *
+ * - `valenceMin` / `valenceMax` / `arousalMin` / `arousalMax` ——
+ *   情绪的**取值范围**。这些是引擎的硬边界，不是「世界的气质」，
+ *   让 LLM 去调它们只会有两种结果：调出一个不合理的范围，
+ *   或者调出一个合理但用户没要求的范围。**不该给 LLM。**
+ *
+ * - `referencedDecayFactor` —— 洞见引用旧记忆时的衰减系数。
+ *   这是引擎内部的**实现细节**（旧记忆被新洞见吸收，所以衰减更快），
+ *   对世界设计者来说没有可理解的语义。**不该给 LLM。**
+ *
+ * 换句话说：白名单 = **「换一套世界气质」时你会想拧的旋钮**。
+ * 不是所有规则参数都是气质旋钮。
+ */
+export const WORLD_DESIGN_RULE_KEYS: Record<RuleGroup, readonly string[]> = {
+  emotion: [
+    "decayRate",
+    "valenceCurrentWeight",
+    "valenceEventWeight",
+    "arousalCurrentWeight",
+    "arousalEventWeight",
+    "strongValenceThreshold",
+    "strongArousalThreshold",
+    "mildArousalThreshold",
+    "boredArousalThreshold",
+    "arousalBaseline",
+  ],
+  needs: ["baseDecay", "strenuousExtraDecay", "intuitionCoefficient"],
+  memory: [
+    "recencyDecayRate",
+    "relevanceWeight",
+    "recencyWeight",
+    "importanceWeight",
+    "emotionalIntensityWeight",
+    "relatedCharacterBonus",
+    "relatedLocationBonus",
+    "consolidateImportance",
+    "consolidateAccessCount",
+    "deleteDecayFactor",
+    "deleteAfterDays",
+    "fadeDecayFactor",
+    "fadeAfterDays",
+    "faintStrengthThreshold",
+    "faintAfterDays",
+    "accessStrengthBonus",
+  ],
+  perception: ["visibleValenceThreshold", "visibleArousalThreshold"],
+  action: ["longActionMinutes"],
+};
+
+/**
+ * 白名单里的键是不是都真实存在。
+ *
+ * 写错了就在这里暴露，而不是等到 LLM 用了一个不存在的键、
+ * `mergeRules` 静默忽略、用户以为改了规则其实没改。
+ */
+export function validateWorldDesignRuleKeys(): string[] {
+  const issues: string[] = [];
+  for (const group of RULE_GROUPS) {
+    const actual = Object.keys(DEFAULT_RULES[group]);
+    for (const key of WORLD_DESIGN_RULE_KEYS[group]) {
+      if (!actual.includes(key)) {
+        issues.push(
+          `WORLD_DESIGN_RULE_KEYS.${group} 列了不存在的键 "${key}"`,
+        );
+      }
+    }
+  }
+  return issues;
+}
+
+/**
  * 深拷贝一份规则。
  *
  * 用 `structuredClone` —— 规则对象是纯数据，没有函数和循环引用，
