@@ -70,6 +70,13 @@ export interface WorldInfo {
   sceneConfig: SceneConfigInfo;
   sceneRuntime: SceneRuntimeInfo;
   mainAreaPoints?: MainAreaPointInfo[];
+  /**
+   * 中心区域的 id —— 世界的公共枢纽。
+   *
+   * 角色在里面用 `mainAreaPointId` 点位寻址。
+   * 旧世界没声明时是 `"main_area"`。
+   */
+  centerLocationId?: string;
   timelineTickCount?: number;
 }
 

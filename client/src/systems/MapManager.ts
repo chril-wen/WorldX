@@ -1,4 +1,4 @@
-import { TILE_SIZE } from "../config/game-config";
+import { TILE_SIZE, DEFAULT_CENTER_LOCATION_ID } from "../config/game-config";
 import type { MainAreaPointInfo } from "../types/api";
 
 export interface LocationRect {
@@ -40,6 +40,47 @@ export class MapManager {
   mainAreaPoints: Map<string, MainAreaPointNode> = new Map();
   private walkableComponentCache: Map<string, Set<string>> = new Map();
 
+  /**
+   * 中心区域的 id —— 世界的公共枢纽。
+   *
+   * 角色在里面用 `mainAreaPointId` 点位寻址。
+   *
+   * 默认是 `"main_area"` —— 旧世界都叫这个。真正的值要等
+   * `/world/info` 回来才知道（见 `setCenterLocationId`）。
+   */
+  private centerLocationId: string = DEFAULT_CENTER_LOCATION_ID;
+
+  getCenterLocationId(): string {
+    return this.centerLocationId;
+  }
+
+  /**
+   * 设置中心区域的 id —— 拿到 `/world/info` 之后调用。
+   *
+   * ## 为什么需要一个「修正」步骤
+   *
+   * `loadFromTiledJSON()` 是**同步**的，在 Phaser 的 `create()` 里跑；
+   * 而中心区域 id 要等**异步**的 `/world/info` 才回来。
+   *
+   * 所以合成兜底先用一个占位 id 建好，拿到真 id 之后
+   * 这里把已经建好的 location 改名 —— 否则地图上那个合成区域
+   * 会永远挂着错的 id，寻路和区域判定会对不上。
+   */
+  setCenterLocationId(id: string): void {
+    if (typeof id !== "string" || id.trim().length === 0) return;
+    const next = id.trim();
+    if (next === this.centerLocationId) return;
+
+    // 之前用占位 id 合成的区域 —— 改成真 id。
+    const synthetic = this.locations.get(this.centerLocationId);
+    if (synthetic?.synthetic) {
+      this.locations.delete(this.centerLocationId);
+      const renamed: LocationRect = { ...synthetic, id: next };
+      this.locations.set(next, renamed);
+    }
+    this.centerLocationId = next;
+  }
+
   loadFromTiledJSON(json: any): void {
     this.tileSize = json.tilewidth || TILE_SIZE;
     this.gridWidth = json.width;
@@ -60,8 +101,10 @@ export class MapManager {
     }
 
     if (this.locations.size === 0) {
-      this.locations.set("main_area", {
-        id: "main_area",
+      // 合成兜底 —— 用当前的中心 id 占位。
+      // 拿到 /world/info 之后 setCenterLocationId() 会把它改成真 id。
+      this.locations.set(this.centerLocationId, {
+        id: this.centerLocationId,
         name: "Main Area",
         x: 0,
         y: 0,
@@ -403,11 +446,13 @@ export class MapManager {
     if (!locationId) return false;
     const loc = this.locations.get(locationId);
     if (!loc) return false;
-    return !(loc.synthetic && loc.id === "main_area");
+    return !(loc.synthetic && loc.id === this.centerLocationId);
   }
 
   getVisibleLocations(): LocationRect[] {
-    return Array.from(this.locations.values()).filter((loc) => !(loc.synthetic && loc.id === "main_area"));
+    return Array.from(this.locations.values()).filter(
+      (loc) => !(loc.synthetic && loc.id === this.centerLocationId),
+    );
   }
 
   getInteractiveObjects(): InteractiveObject[] {

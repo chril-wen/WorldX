@@ -1,5 +1,16 @@
 export const TILE_SIZE = 32;
 
+/**
+ * 中心区域的默认 id —— 世界的公共枢纽。
+ *
+ * 角色在里面用 `mainAreaPointId` 点位寻址。
+ *
+ * 跟 core 的 `DEFAULT_CENTER_LOCATION_ID` 是同一个值。
+ * 真正的值从 `/world/info` 的 `centerLocationId` 来 ——
+ * 旧世界都叫 "main_area"，所以默认值让行为跟之前完全一致。
+ */
+export const DEFAULT_CENTER_LOCATION_ID = "main_area";
+
 export const SPRITE_FRAME_WIDTH = 170;
 export const SPRITE_FRAME_HEIGHT = 204;
 export const SPRITE_COLUMNS = 6;

@@ -27,7 +27,7 @@ export class CharacterMovement {
     locationId: string,
     options: { force?: boolean; mainAreaPointId?: string | null } = {},
   ): Promise<void> {
-    if (locationId === "main_area" && options.mainAreaPointId) {
+    if (locationId === this.mapManager.getCenterLocationId() && options.mainAreaPointId) {
       await this.moveToMainAreaPoint(charId, options.mainAreaPointId, options);
       return;
     }
@@ -80,7 +80,7 @@ export class CharacterMovement {
     if (!target) return;
 
     const onArrive = () => {
-      sprite.currentLocationId = "main_area";
+      sprite.currentLocationId = this.mapManager.getCenterLocationId();
       sprite.mainAreaPointId = pointId;
       sprite.setMovementAnchor({
         x: target.x,
@@ -115,7 +115,7 @@ export class CharacterMovement {
     const currentLoc = sprite.currentLocationId;
     const pinned = this.mapManager.isPinnedLocation(currentLoc);
     const isProfileAnchored = !!sprite.profileAnchor;
-    const anchoredInMainArea = currentLoc === "main_area" && !!sprite.mainAreaPointId && !!sprite.movementAnchor;
+    const anchoredInMainArea = currentLoc === this.mapManager.getCenterLocationId() && !!sprite.mainAreaPointId && !!sprite.movementAnchor;
     const useFixedAnchor = (pinned || anchoredInMainArea || isProfileAnchored) && !!sprite.movementAnchor;
     const origin = useFixedAnchor && sprite.movementAnchor
       ? sprite.movementAnchor
@@ -322,7 +322,10 @@ export class CharacterMovement {
     responder: CharacterSprite,
     desiredDistance: number,
   ): { initiator: { x: number; y: number }; responder: { x: number; y: number } } | null {
-    if (responder.currentLocationId !== "main_area" || !responder.mainAreaPointId) {
+    if (
+      responder.currentLocationId !== this.mapManager.getCenterLocationId() ||
+      !responder.mainAreaPointId
+    ) {
       return null;
     }
     return this.mapManager.getMainAreaDialoguePairPlacements(
@@ -342,8 +345,8 @@ export class CharacterMovement {
     responder: CharacterSprite,
   ): { mainAreaPointId: string | null } | null {
     if (
-      initiator.currentLocationId === "main_area" &&
-      responder.currentLocationId === "main_area" &&
+      initiator.currentLocationId === this.mapManager.getCenterLocationId() &&
+      responder.currentLocationId === this.mapManager.getCenterLocationId() &&
       responder.mainAreaPointId
     ) {
       return { mainAreaPointId: responder.mainAreaPointId };
@@ -423,10 +426,10 @@ export class CharacterMovement {
     const locationId = this.mapManager.getLocationAtPixel(sprite.x, sprite.y);
     if (locationId) {
       sprite.currentLocationId = locationId;
-      if (locationId !== "main_area") {
+      if (locationId !== this.mapManager.getCenterLocationId()) {
         sprite.mainAreaPointId = null;
       }
-      if (locationId === "main_area" && sprite.mainAreaPointId) {
+      if (locationId === this.mapManager.getCenterLocationId() && sprite.mainAreaPointId) {
         return;
       }
       sprite.setMovementAnchor({
@@ -443,7 +446,7 @@ export class CharacterMovement {
     target: { x: number; y: number },
   ): void {
     sprite.setPosition(target.x, target.y);
-    sprite.currentLocationId = "main_area";
+    sprite.currentLocationId = this.mapManager.getCenterLocationId();
     sprite.mainAreaPointId = pointId;
     sprite.setMovementAnchor({
       x: target.x,
@@ -535,7 +538,7 @@ export class CharacterMovement {
     const occupants = new Set<string>([includeCharId]);
     for (const [charId, sprite] of this.sprites) {
       if (charId === includeCharId) continue;
-      if (sprite.currentLocationId !== "main_area") continue;
+      if (sprite.currentLocationId !== this.mapManager.getCenterLocationId()) continue;
       if (sprite.mainAreaPointId !== pointId) continue;
       occupants.add(charId);
     }

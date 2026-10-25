@@ -201,6 +201,9 @@ export class WorldScene extends Phaser.Scene {
   private async initAsync() {
     try {
       const worldInfo = await apiClient.getWorldInfo();
+      // 中心区域的 id —— 合成兜底先用了占位 id，这里改成真的。
+      // 顺序很重要：先设 id（会修正已合成的 location），再设点位。
+      this.mapManager.setCenterLocationId(worldInfo.centerLocationId || "");
       this.mapManager.setMainAreaPoints(worldInfo.mainAreaPoints || []);
       if (this.regionBoundsOverlay || this.mainAreaPointsOverlay || this.interactiveObjectsOverlay) {
         this.refreshDebugOverlays();
@@ -234,7 +237,7 @@ export class WorldScene extends Phaser.Scene {
     const mainAreaOccupants = new Map<string, string[]>();
 
     for (const char of initFrame.characters) {
-      if (char.location !== "main_area" || !char.mainAreaPointId) continue;
+      if (char.location !== this.mapManager.getCenterLocationId() || !char.mainAreaPointId) continue;
       const occupants = mainAreaOccupants.get(char.mainAreaPointId) ?? [];
       occupants.push(char.id);
       mainAreaOccupants.set(char.mainAreaPointId, occupants);
@@ -280,7 +283,7 @@ export class WorldScene extends Phaser.Scene {
     const seenCharacterIds = new Set<string>();
 
     for (const char of characters) {
-      if (char.location !== "main_area" || !char.mainAreaPointId) continue;
+      if (char.location !== this.mapManager.getCenterLocationId() || !char.mainAreaPointId) continue;
       const occupants = mainAreaOccupants.get(char.mainAreaPointId) ?? [];
       occupants.push(char.id);
       mainAreaOccupants.set(char.mainAreaPointId, occupants);
@@ -319,7 +322,7 @@ export class WorldScene extends Phaser.Scene {
     mainAreaOccupants: Map<string, string[]>,
   ): { x: number; y: number } {
     return (
-      (char.location === "main_area" && char.mainAreaPointId
+      (char.location === this.mapManager.getCenterLocationId() && char.mainAreaPointId
         ? this.mapManager.getMainAreaPlacement(char.mainAreaPointId, char.id, {
             occupantIds: mainAreaOccupants.get(char.mainAreaPointId) ?? [char.id],
           })

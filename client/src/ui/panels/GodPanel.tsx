@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../services/api-client";
-import type { CharacterInfo } from "../../types/api";
+import type { CharacterInfo, LocationInfo } from "../../types/api";
 
 type TabKey = "broadcast" | "whisper" | "expand";
 
@@ -19,6 +19,10 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>("broadcast");
   const [characters, setCharacters] = useState<CharacterInfo[]>([]);
+  // 世界里的地点列表 —— 广播范围要能选到**每一个**地点，
+  // 不只是中心区域。之前这里写死了 "main_area" 一个选项，
+  // 世界有多个地点时管理员根本选不到别的。
+  const [locations, setLocations] = useState<LocationInfo[]>([]);
   const [flash, setFlash] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastBroadcastAt, setLastBroadcastAt] = useState<number | null>(null);
@@ -49,6 +53,13 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
       })
       .catch((err) => {
         console.warn("[GodPanel] load characters failed", err);
+      });
+
+    apiClient
+      .getLocations()
+      .then(setLocations)
+      .catch((err) => {
+        console.warn("[GodPanel] load locations failed", err);
       });
   }, []);
 
@@ -203,7 +214,11 @@ export function GodPanel({ onClose }: { onClose: () => void }) {
                     style={selectStyle}
                   >
                     <option value="global">{t("god.scopeGlobal")}</option>
-                    <option value="main_area">main_area</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name || loc.id}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
