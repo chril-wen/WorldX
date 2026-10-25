@@ -136,19 +136,25 @@ export interface WorldTimeInfo extends GameTime {
   weather?: WeatherInfo;
 }
 
-export interface LocationInfo {
-  id: string;
-  name: string;
-  description: string;
-}
+/**
+ * 一个地点的只读摘要。
+ *
+ * **定义搬到 `@worldx/client-core` 了** —— 它描述的是「地图上的地点」，
+ * 属于地图数据层，跟 `LocationRect` / `InteractiveObject` 是一类。
+ * 改造前它跟一堆纯 API DTO（时间线、角色、日记）混在这个文件里，
+ * 但它不是 API DTO —— 它是地图数据。
+ *
+ * 这里保留 re-export，client 侧的一堆 import 不用改。
+ */
+export type { LocationInfo } from "@worldx/client-core";
 
-export interface MainAreaPointInfo {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  adjacentPointIds: string[];
-}
+/**
+ * 主区域点位。
+ *
+ * 同样搬到 `@worldx/client-core` 了 —— 它直接用 core 的
+ * `MainAreaPointConfig`（字段逐字相同，改造前是两个名字的一份东西）。
+ */
+export type { MainAreaPointInfo } from "@worldx/client-core";
 
 export interface TimelineMeta {
   id: string;

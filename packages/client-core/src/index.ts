@@ -60,6 +60,7 @@ export type {
 
 export type {
   GridPoint,
+  LocationInfo,
   MainAreaPointInfo,
   PixelPoint,
   StepAxis,

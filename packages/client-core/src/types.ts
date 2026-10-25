@@ -42,6 +42,23 @@ export interface LocationRect {
   synthetic?: boolean;
 }
 
+/**
+ * 一个地点的**只读摘要** —— 客户端 UI 拿地点列表时用。
+ *
+ * 改造前定义在 `client/src/types/api.ts`，跟其它 API DTO 混在一起。
+ * 但它描述的是**地图上的地点**，属于地图数据层 ——
+ * 跟 `LocationRect` / `InteractiveObject` 是一类。
+ *
+ * 它是 core 的 `LocationConfig` 的**子集**（只有 id / name / description），
+ * 不是同一个东西：`LocationConfig` 是服务端的世界配置（带邻接和物件），
+ * 这个是客户端拉列表用的轻量投影。
+ */
+export interface LocationInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
 /** 地图上的一个可交互物件 */
 export interface InteractiveObject {
   objectId: string;
