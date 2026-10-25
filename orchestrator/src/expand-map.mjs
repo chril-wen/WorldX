@@ -1193,6 +1193,13 @@ export function updateWorldConfig(
 ) {
   const existingLocations = Array.isArray(worldConfig.locations) ? worldConfig.locations : [];
   const existingIds = new Set(existingLocations.map((l) => l.id));
+  // 中心区域的 id —— 新区域挂到它上面。
+  // 世界没声明就用默认的 "main_area"（迁移函数补的也是这个）。
+  const centerLocationId =
+    typeof worldConfig.centerLocationId === "string" &&
+    worldConfig.centerLocationId.trim().length > 0
+      ? worldConfig.centerLocationId
+      : "main_area";
 
   // 新区域内（或附近）的可交互物件归属到该区域
   const objectsByRegion = new Map();
@@ -1237,7 +1244,7 @@ export function updateWorldConfig(
         id: r.id,
         name: r.name,
         description: r.description || "",
-        adjacentLocations: ["main_area"],
+        adjacentLocations: [centerLocationId],
         objects: objectsByRegion.get(r.id) || [],
       };
       if (r.indoor === true || r.indoor === false) {

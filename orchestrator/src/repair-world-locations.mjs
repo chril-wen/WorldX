@@ -10,19 +10,50 @@
  *
  * 修复规则（TMJ 是地图布局的权威来源）：
  *   1. TMJ 里每个 region，都要在 world.json 里有一个同 id 的 location
- *   2. world.json 里除 main_area 外的 location，都要有对应的 TMJ region
+ *   2. world.json 里除中心区域外的 location，都要有对应的 TMJ region
  *      （没有对应区域的 location 是历史残留，会让角色去到地图上不存在的地方）
- *   3. main_area 允许没有 TMJ region（它是「公共枢纽」概念）
+ *   3. 中心区域允许没有 TMJ region（它是「公共枢纽」概念）
  *   4. 顺带用规范算法重建 mainAreaPoints（命名 + 邻接关系）
  *
  * 运行：node orchestrator/src/repair-world-locations.mjs <worldDir> [--dry-run]
  */
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { buildMainAreaPoints } from "./main-area-points.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * 加载 core 的 world.json 迁移函数。
+ *
+ * 走 tsx 吃 core **源码** —— 跟 vitest、跟 config-generator 走的是同一份逻辑，
+ * 不用先 build core，也不会用到旧的 dist。
+ */
+let migrateCache;
+async function loadMigrate() {
+  if (migrateCache !== undefined) return migrateCache;
+  const corePath = join(
+    __dirname,
+    "..",
+    "..",
+    "packages",
+    "core",
+    "src",
+    "engine",
+    "world-migration.ts",
+  );
+  try {
+    const { tsImport } = await import("tsx/esm/api");
+    const mod = await tsImport(pathToFileURL(corePath).href, import.meta.url);
+    migrateCache = mod.migrateWorldConfig;
+  } catch (err) {
+    throw new Error(
+      `[Repair] 加载 core 的迁移函数失败（${corePath}）：${err?.message ?? err}`,
+    );
+  }
+  return migrateCache;
+}
 
 function readJSON(path) {
   return JSON.parse(readFileSync(path, "utf-8"));
@@ -38,7 +69,7 @@ function getProps(obj) {
  * 修复单个世界。
  * @returns {{changed: boolean, notes: string[]}}
  */
-export function repairWorld(worldDir, { dryRun = false } = {}) {
+export async function repairWorld(worldDir, { dryRun = false } = {}) {
   const mapDir = join(worldDir, "map");
   const tmjPath = join(mapDir, "06-final.tmj");
   const configPath = join(worldDir, "config", "world.json");
@@ -47,7 +78,11 @@ export function repairWorld(worldDir, { dryRun = false } = {}) {
   if (!existsSync(configPath)) throw new Error("world.json not found: " + configPath);
 
   const tmj = readJSON(tmjPath);
-  const worldConfig = readJSON(configPath);
+  const migrateWorldConfig = await loadMigrate();
+  // 先过迁移 —— 拿到世界自己声明的中心区域 id。
+  // 旧世界没有这个字段，迁移函数补默认值（"main_area"）。
+  const worldConfig = migrateWorldConfig(readJSON(configPath));
+  const centerLocationId = worldConfig.centerLocationId;
 
   const notes = [];
   const regionsLayer = tmj.layers.find((l) => l.name === "regions");
@@ -103,18 +138,18 @@ export function repairWorld(worldDir, { dryRun = false } = {}) {
         id: regionId,
         name: region.name || regionId,
         description: props.description || "",
-        adjacentLocations: ["main_area"],
+        adjacentLocations: [centerLocationId],
         objects: [],
         ...(props.regionType ? { indoor: props.regionType === "building" } : {}),
       });
     }
   }
 
-  // ── 2. 保留 main_area 与其它没有对应 TMJ region 的 location ───────────────
+  // ── 2. 保留中心区域与其它没有对应 TMJ region 的 location ─────────────────
   for (const location of existingLocations) {
     if (consumedLocations.has(location.id)) continue;
     if (seenIds.has(location.id)) continue;
-    if (location.id === "main_area") {
+    if (location.id === centerLocationId) {
       nextLocations.unshift(location);
       continue;
     }
@@ -124,14 +159,16 @@ export function repairWorld(worldDir, { dryRun = false } = {}) {
     );
   }
 
-  // ── 3. 邻接关系：main_area 连到所有新区域 ──────────────────────────────────
+  // ── 3. 邻接关系：中心区域连到所有新区域 ────────────────────────────────────
   const nextIds = new Set(nextLocations.map((l) => l.id));
   for (const location of nextLocations) {
-    if (location.id === "main_area") continue;
+    if (location.id === centerLocationId) continue;
     const adjacent = Array.isArray(location.adjacentLocations)
-      ? location.adjacentLocations.filter((id) => id === "main_area" || nextIds.has(id))
+      ? location.adjacentLocations.filter(
+          (id) => id === centerLocationId || nextIds.has(id),
+        )
       : [];
-    if (!adjacent.includes("main_area")) adjacent.unshift("main_area");
+    if (!adjacent.includes(centerLocationId)) adjacent.unshift(centerLocationId);
     location.adjacentLocations = Array.from(new Set(adjacent));
   }
 
@@ -171,7 +208,7 @@ if (process.argv[1]?.endsWith("repair-world-locations.mjs")) {
     process.exit(1);
   }
   try {
-    const { notes } = repairWorld(worldDir, { dryRun });
+    const { notes } = await repairWorld(worldDir, { dryRun });
     console.log(dryRun ? "[Repair] Dry run:" : "[Repair] Fixed:");
     for (const note of notes) console.log("  - " + note);
   } catch (err) {

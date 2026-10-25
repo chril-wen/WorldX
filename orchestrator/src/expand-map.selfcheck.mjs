@@ -147,8 +147,12 @@ console.log("\n=== 2. TMJ id 与 world.json location id 一致性 ===");
   const tmj = makeTMJ();
   mergeTMJIncremental(tmj, parsed, []).tmj;
 
+  const centerLocationId = "main_area";
   const worldConfig = updateWorldConfig(
-    { locations: [{ id: "main_area", name: "主区域", description: "", adjacentLocations: [], objects: [] }] },
+    {
+      centerLocationId,
+      locations: [{ id: centerLocationId, name: "主区域", description: "", adjacentLocations: [], objects: [] }],
+    },
     designed,
     [],
     parsed.regions,
@@ -172,7 +176,10 @@ console.log("\n=== 2. TMJ id 与 world.json location id 一致性 ===");
     tmjIds.filter((i) => i === "ruined_pagoda").length === 1 &&
       locIds.filter((i) => i === "ruined_pagoda").length === 1,
   );
-  check("新区域 adjacentLocations 指向 main_area", worldConfig.locations.at(-1).adjacentLocations.includes("main_area"));
+  check(
+    "新区域 adjacentLocations 指向中心区域",
+    worldConfig.locations.at(-1).adjacentLocations.includes(centerLocationId),
+  );
 }
 
 console.log("\n=== 2b. 视觉漏检时不丢条目 ===");

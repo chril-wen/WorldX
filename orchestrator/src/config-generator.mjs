@@ -7,6 +7,20 @@ import { buildMainAreaPoints } from "./main-area-points.mjs";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 /**
+ * 中心区域的 id —— 世界的公共枢纽。
+ *
+ * 角色在里面用 `mainAreaPointId` 点位寻址。
+ *
+ * 之前这个概念是写死的 `"main_area"` 字面量，散落在 79 处代码里。
+ * 现在它由 world.json 的 `centerLocationId` 声明；生成新世界时
+ * 用这个默认值，写进 world.json 之后由世界自己携带。
+ *
+ * 跟 core 的 `DEFAULT_CENTER_LOCATION_ID` 是同一个值 ——
+ * 迁移函数给旧世界补的也是这个。
+ */
+const CENTER_LOCATION_ID = "main_area";
+
+/**
  * 加载 core 的规则模块。
  *
  * ## 为什么 orchestrator 现在依赖 core 了
@@ -60,6 +74,49 @@ async function loadCoreRules() {
 }
 
 /**
+ * 加载 core 的区域归一化实现。
+ *
+ * ## 为什么这里必须用 core 那一份
+ *
+ * 改造前，这个算法在 core 和 orchestrator 各写了一遍 ——
+ * **逐字相同，连错误都一样**。只改一边会导致：
+ *
+ * - 世界**生成**出来的主区域 id 跟世界**加载**时算的不一样
+ * - 两边的邻接规则悄悄分叉
+ *
+ * 现在只有 core 一份实现。orchestrator 直接吃它的**源码**
+ * （走 tsx），跟 vitest 走的是同一份逻辑 ——
+ * 不用先 `npm run build:core`，也不会出现「dist 是旧的」。
+ *
+ * 加载失败是**致命的**（不是降级）—— 没有归一化就没有中心区域，
+ * 生成出来的世界是残的。宁可让创建失败，也不要悄悄产出一个坏世界。
+ */
+let coreLocationsCache;
+async function loadCoreLocations() {
+  if (coreLocationsCache !== undefined) return coreLocationsCache;
+  const coreDir = join(__dirname, "..", "..", "packages", "core", "src");
+  const corePath = join(coreDir, "engine", "location-normalizer.ts");
+  const contractsPath = join(coreDir, "contracts", "world.ts");
+  try {
+    const { tsImport } = await import("tsx/esm/api");
+    const [locations, contracts] = await Promise.all([
+      tsImport(pathToFileURL(corePath).href, import.meta.url),
+      tsImport(pathToFileURL(contractsPath).href, import.meta.url),
+    ]);
+    coreLocationsCache = {
+      normalizeLocations: locations.normalizeLocations,
+      WORLD_SCHEMA_VERSION: contracts.WORLD_SCHEMA_VERSION,
+      DEFAULT_CENTER_LOCATION_ID: contracts.DEFAULT_CENTER_LOCATION_ID,
+    };
+  } catch (err) {
+    throw new Error(
+      `[ConfigGenerator] 加载 core 的区域归一化实现失败（${corePath}）：${err?.message ?? err}`,
+    );
+  }
+  return coreLocationsCache;
+}
+
+/**
  * 把规则片段规范化成「实际生效的值」。
  *
  * 做两件事：
@@ -104,6 +161,8 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
   const normalizedDesign = normalizeWorldDesign(worldDesign);
   // 规则在写盘前规范化 —— world.json 存的必须是实际在跑的值。
   const worldRules = await normalizeRulesForWrite(normalizedDesign.rules);
+  // schema 版本号跟 core 一致 —— 从 core 取，不写死。
+  const { WORLD_SCHEMA_VERSION } = await loadCoreLocations();
   const originalPrompt =
     typeof options.originalPrompt === "string" && options.originalPrompt.trim()
       ? options.originalPrompt.trim()
@@ -135,7 +194,7 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     elementObjects: tmjObjects,
   });
 
-  const locations = buildLocations(tmjRegions, tmjObjects, normalizedDesign, tmj, {
+  const locations = await buildLocations(tmjRegions, tmjObjects, normalizedDesign, tmj, {
     primaryPublicHubRegion,
   });
   const worldActions = buildWorldActions(normalizedDesign);
@@ -160,6 +219,9 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
   };
 
   const worldConfig = {
+    // 中心区域的 id —— 世界的公共枢纽。
+    // 插件可以改（接管世界身份）；缺失时由迁移函数补默认值。
+    centerLocationId: CENTER_LOCATION_ID,
     worldName: normalizedDesign.worldName,
     worldDescription: normalizedDesign.worldDescription,
     worldSocialContext: normalizedDesign.worldSocialContext || normalizedDesign.worldDescription,
@@ -236,7 +298,7 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     const charId = genChar?.id || `char_${i + 1}`;
 
     const anchor = charDesign.anchor || undefined;
-    let startPos = "main_area";
+    let startPos = CENTER_LOCATION_ID;
     if (anchor) {
       const anchoredPos = resolveAnchoredStartPosition(
         anchor,
@@ -325,6 +387,14 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     }
   }
 
+  // schemaVersion 在插件钩子**之后**盖上 ——
+  // 版本号是 orchestrator 的职责，插件不该改它
+  // （插件可以改 centerLocationId，那是世界身份）。
+  finalWorldConfig = {
+    ...finalWorldConfig,
+    schemaVersion: WORLD_SCHEMA_VERSION,
+  };
+
   for (const config of finalCharacterConfigs) {
     writeFileSync(
       join(charactersDir, `${config.id}.json`),
@@ -353,7 +423,7 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
   };
 }
 
-function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) {
+async function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) {
   const designedRegions = worldDesign.regions || worldDesign.locations || [];
   const designedElements = worldDesign.interactiveElements || [];
   const primaryPublicHubRegion = options.primaryPublicHubRegion || null;
@@ -366,7 +436,7 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
 
   if (tmjRegions.length > 0) {
     const primaryHubObjects = primaryPublicHubRegion
-      ? buildObjectsForRegion("main_area", primaryPublicHubRegion, tmjObjects, designedRegions)
+      ? buildObjectsForRegion(CENTER_LOCATION_ID, primaryPublicHubRegion, tmjObjects, designedRegions)
       : [];
     const authoredLocations = tmjRegions
       .filter((region) => getRegionId(region) !== primaryPublicHubId)
@@ -379,7 +449,7 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
         const adjacentLocations = tmjRegions
           .filter((other) => other !== region && regionsAreAdjacent(region, other, tmj.tilewidth * 3))
           .map((other) =>
-            getRegionId(other) === primaryPublicHubId ? "main_area" : getRegionId(other),
+            getRegionId(other) === primaryPublicHubId ? CENTER_LOCATION_ID : getRegionId(other),
           );
 
         const indoor = designedLoc?.indoor === true || designedLoc?.indoor === false
@@ -397,15 +467,17 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
         return result;
       });
 
-    const locations = finalizeLocations(
+    const { normalizeLocations } = await loadCoreLocations();
+    const locations = normalizeLocations(
       authoredLocations,
+      CENTER_LOCATION_ID,
       worldDesign.worldName || "Main Area",
       worldDesign.worldDescription || "",
     );
 
     // Attach public-hub and element objects to main_area
     if (primaryHubObjects.length > 0 || elementObjects.length > 0) {
-      const mainArea = locations.find((l) => l.id === "main_area");
+      const mainArea = locations.find((l) => l.id === CENTER_LOCATION_ID);
       if (mainArea) {
         mainArea.objects = [...mainArea.objects, ...primaryHubObjects, ...elementObjects];
       }
@@ -419,7 +491,7 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
       (loc.interactions || []).map((inter) => ({
         id: inter.id || `${loc.id}_action`,
         name: inter.name,
-        locationId: "main_area",
+        locationId: CENTER_LOCATION_ID,
         defaultState: "available",
         capacity: 2,
         interactions: [
@@ -439,15 +511,21 @@ function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options = {}) 
     ...elementObjects,
   ];
 
-  return finalizeLocations([
-    {
-      id: "main_area",
-      name: worldDesign.worldName || "Main Area",
-      description: worldDesign.worldDescription || "",
-      adjacentLocations: [],
-      objects: mainObjects,
-    },
-  ], worldDesign.worldName || "Main Area", worldDesign.worldDescription || "");
+  const { normalizeLocations } = await loadCoreLocations();
+  return normalizeLocations(
+    [
+      {
+        id: CENTER_LOCATION_ID,
+        name: worldDesign.worldName || "Main Area",
+        description: worldDesign.worldDescription || "",
+        adjacentLocations: [],
+        objects: mainObjects,
+      },
+    ],
+    CENTER_LOCATION_ID,
+    worldDesign.worldName || "Main Area",
+    worldDesign.worldDescription || "",
+  );
 }
 
 function buildObjectsForRegion(locationId, region, tmjObjects, designedRegions) {
@@ -532,7 +610,7 @@ function buildElementObjects(designedElements, tmjObjects) {
     return {
       id: element.id,
       name: element.name,
-      locationId: "main_area",
+      locationId: CENTER_LOCATION_ID,
       defaultState: "available",
       capacity: 2,
       interactions,
@@ -745,55 +823,6 @@ function regionsAreAdjacent(a, b, threshold) {
   return dist < minDist + threshold;
 }
 
-function finalizeLocations(locations, worldName, worldDescription) {
-  const authoredLocations = Array.isArray(locations) ? locations : [];
-  const authoredIds = authoredLocations
-    .map((location) => location.id)
-    .filter((locationId) => locationId && locationId !== "main_area");
-  const hasMainArea = authoredLocations.some((location) => location.id === "main_area");
-  const withMainArea = hasMainArea
-    ? authoredLocations
-    : [
-        {
-          id: "main_area",
-          name: "主区域",
-          description: worldDescription || `${worldName}中的公共活动区域`,
-          adjacentLocations: [...authoredIds],
-          objects: [],
-        },
-        ...authoredLocations,
-      ];
-
-  const allIds = withMainArea.map((location) => location.id);
-  const hasAnyAuthoredAdjacency = withMainArea.some(
-    (location) =>
-      location.id !== "main_area" && Array.isArray(location.adjacentLocations) && location.adjacentLocations.length > 0,
-  );
-
-  return withMainArea.map((location) => {
-    let adjacentLocations = unique(
-      (location.adjacentLocations || []).filter(
-        (adjacentId) => adjacentId && adjacentId !== location.id && allIds.includes(adjacentId),
-      ),
-    );
-
-    if (location.id === "main_area") {
-      adjacentLocations = unique([...adjacentLocations, ...authoredIds]);
-    } else if (adjacentLocations.length === 0) {
-      adjacentLocations = hasAnyAuthoredAdjacency
-        ? ["main_area"]
-        : allIds.filter((adjacentId) => adjacentId !== location.id);
-    } else {
-      adjacentLocations = unique(["main_area", ...adjacentLocations]);
-    }
-
-    return {
-      ...location,
-      adjacentLocations,
-    };
-  });
-}
-
 function unique(values) {
   return Array.from(new Set(values));
 }
@@ -820,7 +849,7 @@ function findStartPositions(collisionData, gridWidth, gridHeight, tileSize, regi
       tileY: Math.floor(gridHeight / 2),
       pixelX: (Math.floor(gridWidth / 2) + i) * tileSize,
       pixelY: Math.floor(gridHeight / 2) * tileSize,
-      locationId: regions[0]?.name?.toLowerCase().replace(/\s+/g, "_") || "main_area",
+      locationId: regions[0]?.name?.toLowerCase().replace(/\s+/g, "_") || CENTER_LOCATION_ID,
     }));
   }
 
@@ -828,7 +857,7 @@ function findStartPositions(collisionData, gridWidth, gridHeight, tileSize, regi
   return Array.from({ length: count }, (_, i) => {
     const pos = spawnableWalkable[Math.min((i + 1) * step, spawnableWalkable.length - 1)];
 
-    let locationId = "main_area";
+    let locationId = CENTER_LOCATION_ID;
     if (regions.length > 0) {
       const px = pos.x * tileSize;
       const py = pos.y * tileSize;
@@ -945,7 +974,7 @@ function resolveAnchoredStartPosition(anchor, tmjRegions, tmjObjects, collisionD
         tileY: gy,
         pixelX: point.x,
         pixelY: point.y,
-        locationId: "main_area",
+        locationId: CENTER_LOCATION_ID,
         mainAreaPointId: elementPointId,
       };
     }
@@ -969,7 +998,7 @@ function resolveAnchoredStartPosition(anchor, tmjRegions, tmjObjects, collisionD
           tileY: walkable.y,
           pixelX: walkable.x * tileSize + tileSize / 2,
           pixelY: walkable.y * tileSize + tileSize / 2,
-          locationId: "main_area",
+          locationId: CENTER_LOCATION_ID,
         };
       }
     }
