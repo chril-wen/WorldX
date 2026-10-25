@@ -53,6 +53,19 @@
 - `hearsay`（对象，**可选**）：传闻传播规则开关
   - `enabled`（布尔，默认为 `false`）：是否启用对话内容传闻扩散。设为 `true` 时，对话中有趣的内容会在角色间传播，影响后续感知
 
+- `rules`（对象，**可选**）：世界规则 —— 决定这个世界的人**怎么活**。只在用户的描述明确暗示了某种气质时才填；拿不准就省略（省略 = 走系统默认）
+
+  **只写要改的项，其余走默认。不要输出完整的规则表。**
+
+  可用的组与键：
+  - `emotion`：`decayRate`（情绪衰减率，0–1，默认 0.95，越小情绪消得越快 → 越理性冷静；越大越记仇）、`valenceCurrentWeight`（默认 0.7，当前情绪在混合中的占比，越小越情绪外露）、`valenceEventWeight`（默认 0.3）、`arousalCurrentWeight`（默认 0.8）、`arousalEventWeight`（默认 0.2）、`strongValenceThreshold`（默认 2，情绪外露的效价门限，越大越不动声色）、`strongArousalThreshold`（默认 6）、`mildArousalThreshold`（默认 3）、`boredArousalThreshold`（默认 1）、`arousalBaseline`（默认 3）
+  - `needs`：`baseDecay`（默认 0.5，好奇心基础衰减）、`strenuousExtraDecay`（默认 0.5，体力活动额外衰减）、`intuitionCoefficient`（默认 1.0，直觉对衰减的放大）
+  - `memory`：`recencyDecayRate`（默认 0.05，新鲜度衰减，越大忘得越快）、`relevanceWeight`（默认 3）、`recencyWeight`（默认 2）、`importanceWeight`（默认 2）、`emotionalIntensityWeight`（默认 1）、`relatedCharacterBonus`（默认 0.3）、`relatedLocationBonus`（默认 0.2）、`consolidateImportance`（默认 6，转长期记忆的重要度门限）、`consolidateAccessCount`（默认 3）、`deleteDecayFactor`（默认 0.1）、`deleteAfterDays`（默认 7）、`fadeDecayFactor`（默认 0.3）、`fadeAfterDays`（默认 3）、`faintStrengthThreshold`（默认 3）、`faintAfterDays`（默认 5）、`accessStrengthBonus`（默认 0.5）
+  - `perception`：`visibleValenceThreshold`（默认 2，别人看得出你在情绪化的效价门限）、`visibleArousalThreshold`（默认 7）
+  - `action`：`longActionMinutes`（默认 60，多长算长动作）
+
+  例：用户说「一个悲伤的世界，人们记性很短」→ `"rules": {"memory": {"recencyDecayRate": 0.2}}`；用户说「一群暴躁的人，情绪一点就炸」→ `"rules": {"emotion": {"valenceCurrentWeight": 0.4, "valenceEventWeight": 0.6}}`
+
 - `worldActions`（数组）：1–6 项。这些是全场景通用的动作，在任意位置均可使用。每个世界至少包含一个有意义的全局动作（closed场景必须有"睡觉"相关的动作）。每项包含：
   - `id`（snake_case，英文）
   - `name`（语言与用户输入一致）
@@ -195,11 +208,18 @@
         "source": "仅当知名 IP 时填写——原作名称",
         "keyRelationships": ["某人：在原作中为何重要"],
         "signatureMoments": ["一两个定义性时刻——该角色的心结或执念"]
+      },
+      "rules": {
+        "memory": { "recencyDecayRate": 0.2 }
       }
     }
   ]
 }
 ```
+
+> 角色级 `rules` 是**可选**的，只在某个角色明显该有特殊气质时才写
+> （比如「这个老头记性特别差」→ `memory.recencyDecayRate` 调大）。
+> 格式跟世界的 `rules` 一样：只写要改的项，其余继承世界级。
 
 规则：
 

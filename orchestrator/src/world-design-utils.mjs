@@ -315,6 +315,24 @@ function normalizeHearsay(rawHearsay) {
 }
 
 /**
+ * 归一化世界规则 —— 设计流程或插件可以指定「这个世界怎么运转」。
+ *
+ * 只做**形状检查**，不做语义校验 —— 具体的规则名是否有效、
+ * 值是否合理，交给 core 的 `mergeRules()` 和 `validateRules()`。
+ * orchestrator 不依赖 core（core 是 TS，orchestrator 是纯 .mjs），
+ * 所以这里只保证「不是个数组、不是 null」这种最低限度。
+ *
+ * @param rawRules 原始规则段
+ * @returns 规则段，或 null（没有就写 null，跟 economics/weather 一致）
+ */
+function normalizeRules(rawRules) {
+  if (!rawRules || typeof rawRules !== "object" || Array.isArray(rawRules)) {
+    return null;
+  }
+  return rawRules;
+}
+
+/**
  * 归一化世界设计 —— 把 LLM 返回的原始结构整理成内部统一形状。
  *
  * 注意 `export` 关键字：**2026-10-24 之前这里漏了 export**，
@@ -392,6 +410,7 @@ export function normalizeWorldDesign(rawDesign) {
     relationships,
     weather,
     hearsay,
+    rules: normalizeRules(rawDesign?.rules),
   };
 }
 

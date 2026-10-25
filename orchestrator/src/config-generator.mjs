@@ -83,6 +83,9 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     economics: normalizedDesign.economics || null,
     weather: normalizedDesign.weather || null,
     hearsay: normalizedDesign.hearsay || null,
+    // 世界规则 —— 只写要改的项，其余走 core 的默认值。
+    // 设计流程或插件可以在这里注入规则，让世界「一出生就带着某种气质」。
+    rules: normalizedDesign.rules || null,
     metadata: {
       worldName: normalizedDesign.worldName,
       worldDescription: normalizedDesign.worldDescription,
@@ -181,6 +184,11 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     if (anchor) config.anchor = anchor;
     if (iconicCues) config.iconicCues = iconicCues;
     if (canonicalRefs) config.canonicalRefs = canonicalRefs;
+    // 角色级规则覆盖 —— 设计时可以为某个角色指定特殊气质
+    // （比如「这个角色记性特别短」）。只写要改的项，其余继承世界级。
+    if (charDesign.rules && typeof charDesign.rules === "object") {
+      config.rules = charDesign.rules;
+    }
 
     // 写盘挪到后面 —— 要等插件的 extendWorldConfig 钩子跑完。
     // 插件可能改角色配置，在这儿写就把它改的丢了。
