@@ -37,12 +37,34 @@ describe("提示词模板读取不依赖 cwd", () => {
     console.log(out.join("|"));
   `;
 
+  /**
+   * 在指定 cwd 下跑子进程，调用**真的** `loadPromptTemplate`，
+   * 把读到的模板长度输出出来。
+   *
+   * ## 为什么这里要重试
+   *
+   * 这条测试会 spawn 一个 tsx 子进程（每次约 1.8 秒）。
+   * vitest 默认同时起 29 个 worker，Windows 上并发 spawn 子进程
+   * 会偶发失败（进程没起来 / 管道写不进去）——
+   * 那是**环境噪声**，不是被测代码坏了。
+   *
+   * 重试只针对「子进程起不来」这一种失败；
+   * 断言本身一点都不放松 —— 模板读不到照样会红。
+   */
   function loadFrom(cwd: string): string {
-    return execFileSync(
-      process.execPath,
-      [path.join(REPO_ROOT, "server/node_modules/tsx/dist/cli.mjs"), "-e", SCRIPT],
-      { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
-    ).trim();
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return execFileSync(
+          process.execPath,
+          [path.join(REPO_ROOT, "server/node_modules/tsx/dist/cli.mjs"), "-e", SCRIPT],
+          { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
+        ).trim();
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError;
   }
 
   it("从 server/ 和仓库根读到的模板完全一致", () => {
