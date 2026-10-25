@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { WorldConfig, CharacterProfile, SceneConfig } from "../types/index.js";
+import { migrateWorldConfig, DEFAULT_CENTER_LOCATION_ID } from "@worldx/core";
 import type { IconicCues, CanonicalRefs, CharacterAnchor } from "../types/character.js";
 import { LEGACY_CONFIGS_DIR, PROMPTS_DIR } from "./repo-paths.js";
 
@@ -40,7 +41,9 @@ export function loadWorldConfig(): WorldConfig {
   for (const filePath of candidates) {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, "utf-8");
-      cachedWorldConfig = JSON.parse(raw) as WorldConfig;
+      // 迁移在**读取时**生效 —— 旧世界不用改磁盘文件就能跑。
+      // 只补不删：除新增的 schemaVersion / centerLocationId 外逐字段不变。
+      cachedWorldConfig = migrateWorldConfig(JSON.parse(raw));
       return cachedWorldConfig;
     }
   }
@@ -49,6 +52,16 @@ export function loadWorldConfig(): WorldConfig {
 
 export function loadCharacterProfiles(): CharacterProfile[] {
   if (cachedCharacterProfiles) return cachedCharacterProfiles;
+
+  // 角色起点归一化需要中心区域 id —— 先确保 world config 已加载
+  // （loadWorldConfig 有缓存，代价很小）。
+  // world.json 找不到时不算错：角色目录可能独立存在。
+  let centerLocationId = DEFAULT_CENTER_LOCATION_ID;
+  try {
+    centerLocationId = loadWorldConfig().centerLocationId ?? DEFAULT_CENTER_LOCATION_ID;
+  } catch {
+    // 保持默认值
+  }
 
   const candidates = [
     worldDir ? path.join(worldDir, "config", "characters") : null,
@@ -62,7 +75,7 @@ export function loadCharacterProfiles(): CharacterProfile[] {
       cachedCharacterProfiles = files
         .map((f) => {
         const raw = fs.readFileSync(path.join(dir!, f), "utf-8");
-          return normalizeCharacterProfile(JSON.parse(raw));
+          return normalizeCharacterProfile(JSON.parse(raw), centerLocationId);
         })
         .filter(Boolean) as CharacterProfile[];
       if (cachedCharacterProfiles.length > 0) {
@@ -154,12 +167,15 @@ export function reloadConfigs(): void {
   cachedPromptTemplates.clear();
 }
 
-export function normalizeCharacterProfile(raw: any): CharacterProfile | null {
+export function normalizeCharacterProfile(
+  raw: any,
+  centerLocationId: string = DEFAULT_CENTER_LOCATION_ID,
+): CharacterProfile | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || !raw.id || !raw.name) {
     return null;
   }
 
-  const startLocation = normalizeStartLocation(raw.startPosition);
+  const startLocation = normalizeStartLocation(raw.startPosition, centerLocationId);
   const socialStyle = normalizeSocialStyle(raw.socialStyle);
   const extraversionLevel = normalizeExtraversionLevel(raw.extraversionLevel, socialStyle);
   const intuitionLevel = normalizeIntuitionLevel(raw.intuitionLevel, raw);
@@ -250,7 +266,10 @@ function toStringArray(value: unknown): string[] {
     .filter((v) => v.length > 0);
 }
 
-function normalizeStartLocation(startPosition: unknown): string {
+function normalizeStartLocation(
+  startPosition: unknown,
+  centerLocationId: string,
+): string {
   if (typeof startPosition === "string" && startPosition) {
     return startPosition;
   }
@@ -262,7 +281,8 @@ function normalizeStartLocation(startPosition: unknown): string {
   ) {
     return (startPosition as { locationId: string }).locationId;
   }
-  return "main_area";
+  // 没写起点 → 落在中心区域（世界的公共枢纽）。
+  return centerLocationId;
 }
 
 function normalizeSocialStyle(value: unknown): CharacterProfile["socialStyle"] {

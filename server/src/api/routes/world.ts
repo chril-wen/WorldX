@@ -59,6 +59,9 @@ router.get("/info", (_req, res) => {
     weather: getWeatherInfo(),
     worldActions: wm.getWorldActions(),
     mainAreaPoints: wm.getMainAreaPoints(),
+    // 中心区域的 id —— 客户端要靠它知道「世界的公共枢纽」是哪个。
+    // 旧世界没声明时是 "main_area"。
+    centerLocationId: wm.getCenterLocationId(),
     worldSize: wm.getWorldSize(),
     mainAreaDialogueRadiusPx: wm.getMainAreaDialogueDistanceThreshold(),
     timelineTickCount: appContext.timelineManager.getTickCount(),

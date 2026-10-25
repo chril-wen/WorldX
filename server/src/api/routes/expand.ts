@@ -130,6 +130,8 @@ router.post("/character", async (req: Request, res: Response) => {
     characterPrompt?: string;
     characterDesign?: unknown;
   };
+  // 中心区域的 id —— 新角色落在世界的公共枢纽。
+  const centerLocationId = appContext.worldManager.getCenterLocationId();
 
   try {
     let profile: CharacterProfile;
@@ -164,7 +166,7 @@ router.post("/character", async (req: Request, res: Response) => {
         name: String(raw.name || "").trim(),
         role: String(raw.role || "NPC").trim(),
         nickname: String(raw.name || "").trim(),
-        startPosition: "main_area",
+        startPosition: centerLocationId,
         appearanceHint: String(raw.appearanceHint || "").trim(),
         coreMotivation: String(raw.motivation || "").trim(),
         coreValues: [],
@@ -179,7 +181,7 @@ router.post("/character", async (req: Request, res: Response) => {
         writeDiary: false,
         fourthWallCandidate: false,
         tags: [],
-        preferredLocations: ["main_area"],
+        preferredLocations: [centerLocationId],
         preferredActivities: [],
         initialMemories: Array.isArray(raw.initialMemories)
           ? raw.initialMemories.map((m: string) => ({
@@ -189,7 +191,7 @@ router.post("/character", async (req: Request, res: Response) => {
               emotionalValence: 0,
               emotionalIntensity: 2,
               relatedCharacters: [] as string[],
-              relatedLocation: "main_area",
+              relatedLocation: centerLocationId,
               relatedObjects: [] as string[],
               tags: [] as string[],
             }))
@@ -220,6 +222,8 @@ router.post("/region", async (req: Request, res: Response) => {
     regionPrompt?: string;
     regionDesign?: unknown;
   };
+  // 中心区域的 id —— 新区域挂到它上面。
+  const centerLocationId = appContext.worldManager.getCenterLocationId();
 
   try {
     let location: LocationConfig;
@@ -250,7 +254,7 @@ router.post("/region", async (req: Request, res: Response) => {
         id: raw.id ?? `region_${generateId().slice(0, 8)}`,
         name: raw.name,
         description: raw.description,
-        adjacentLocations: ["main_area"],
+        adjacentLocations: [centerLocationId],
         objects: [],
         indoor: raw.type === "building",
       };
