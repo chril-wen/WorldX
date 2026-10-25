@@ -331,15 +331,22 @@ async function cmdSet() {
     console.log(`已设置世界规则：${rulePath} = ${value}  (${jsonPath})`);
   }
 
-  // 校验一下合出来的规则合不合理
+  // 校验一下这个值合不合理。
+  //
+  // 用 `validateRawRules` 校验**原始**片段，而不是 `validateRules`
+  // 校验合并后的完整规则 —— 合并时越界的值已经被夹回区间，
+  // 再去校验合并结果就看不到「你填的值越界了」这个事实了。
   const checkRaw = charId
     ? readJson(findCharacterFile(worldDir, charId)).rules
     : readJson(worldJsonPath(worldDir)).rules;
-  const merged = core.mergeRules(checkRaw);
-  const issues = core.validateRules(merged);
+  const issues = core.validateRawRules(checkRaw);
   if (issues.length > 0) {
     console.log("\n⚠ 这个值让规则变得不合理：");
     for (const issue of issues) console.log(`  - ${issue}`);
+    console.log(
+      "\n  提示：越界的值会被引擎夹回合理区间 —— 世界不会崩，" +
+        "但你填的数不会完全生效。",
+    );
   }
 
   console.log(

@@ -366,28 +366,46 @@ describe("validateRules —— 报告问题但不抛错", () => {
     expect(validateRules(DEFAULT_RULES)).toEqual([]);
   });
 
+  // 注意：这些用例**直接构造坏规则对象**，不走 mergeRules ——
+  // 因为 mergeRules 现在会把越界的值夹回区间，坏值到不了这里。
+  // 「用户到底填了什么」由 validateRawRules 负责（见 rules-range.test.ts）。
+
   it("权重越界会被报出来", () => {
-    const bad = mergeRules({ emotion: { valenceCurrentWeight: 5 } });
+    const bad = {
+      ...DEFAULT_RULES,
+      emotion: { ...DEFAULT_RULES.emotion, valenceCurrentWeight: 5 },
+    };
     const issues = validateRules(bad);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.join("\n")).toContain("valenceCurrentWeight");
   });
 
   it("衰减率越界会被报出来", () => {
-    const bad = mergeRules({ emotion: { decayRate: 1.5 } });
+    const bad = {
+      ...DEFAULT_RULES,
+      emotion: { ...DEFAULT_RULES.emotion, decayRate: 1.5 },
+    };
     expect(validateRules(bad).join("\n")).toContain("decayRate");
   });
 
   it("范围反了会被报出来", () => {
-    const bad = mergeRules({ emotion: { valenceMin: 5, valenceMax: -5 } });
+    const bad = {
+      ...DEFAULT_RULES,
+      emotion: { ...DEFAULT_RULES.emotion, valenceMin: 5, valenceMax: -5 },
+    };
     expect(validateRules(bad).join("\n")).toContain("valenceMin");
   });
 
   it("一次报出所有问题", () => {
-    const bad = mergeRules({
-      emotion: { decayRate: 5, valenceCurrentWeight: -1 },
-      needs: { baseDecay: -1 },
-    });
+    const bad = {
+      ...DEFAULT_RULES,
+      emotion: {
+        ...DEFAULT_RULES.emotion,
+        decayRate: 5,
+        valenceCurrentWeight: -1,
+      },
+      needs: { ...DEFAULT_RULES.needs, baseDecay: -1 },
+    };
     const issues = validateRules(bad);
     expect(issues.length).toBeGreaterThanOrEqual(3);
   });

@@ -234,6 +234,31 @@ describe("npm run rules -- set", () => {
     // 但明确警告了
     expect(stdout).toContain("不合理");
   });
+
+  it("越界的值被写进 world.json 时提示会被夹住", () => {
+    const { stdout } = run([
+      "set",
+      "emotion.decayRate",
+      "5",
+      "--world",
+      worldDir,
+    ]);
+    // 警告里要说清楚：世界不会崩，但填的数不会完全生效
+    expect(stdout).toContain("夹回");
+  });
+
+  it("提示里的越界说明是针对原始值（不是合并后的）", () => {
+    // 合并时越界的值已经被夹住，再去校验合并结果就看不到问题了。
+    // CLI 必须校验**原始**片段 —— 证据在那里。
+    const { stdout } = run([
+      "set",
+      "emotion.decayRate",
+      "5",
+      "--world",
+      worldDir,
+    ]);
+    expect(stdout).toContain("5");
+  });
 });
 
 describe("npm run rules -- reset", () => {

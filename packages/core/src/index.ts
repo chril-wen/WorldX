@@ -17,15 +17,19 @@ export { CharacterManager } from "./engine/character-manager.js";
 export {
   DEFAULT_RULES,
   RULE_GROUPS,
+  RULE_RANGES,
   WORLD_DESIGN_RULE_KEYS,
+  clampRuleValue,
   cloneRules,
   mergeRules,
+  validateRawRules,
   validateRules,
   validateWorldDesignRuleKeys,
 } from "./engine/rules.js";
 export type {
   WorldRules,
   RuleGroup,
+  RuleRange,
   EmotionRules,
   NeedsRules,
   MemoryRules,

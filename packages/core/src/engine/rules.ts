@@ -511,7 +511,13 @@ export function mergeRules(
       // 而不是写进规则里当垃圾数据。
       if (!(key in target)) continue;
       if (typeof value === "number" && Number.isFinite(value)) {
-        target[key] = value;
+        // 夹进合法区间 —— 见 RULE_RANGES 的说明。
+        // 越界的值不会报错，只会让世界静默崩坏（实测 decayRate=1.8
+        // 六个 tick 后效价从 3 涨到 46875）。这里挡住它。
+        const range = RULE_RANGES[`${group}.${key}`];
+        target[key] = range
+          ? clampRuleValue(value, range)
+          : value;
       }
     }
   }
@@ -520,10 +526,143 @@ export function mergeRules(
 }
 
 /**
+ * 每个规则参数的**取值范围**。
+ *
+ * ## 为什么要有这张表
+ *
+ * 规则值有三条入口，全部是外部输入：
+ *
+ * | 入口 | 谁能写 |
+ * |---|---|
+ * | `world.json` 的 `rules` 段 | 人手写、插件写 |
+ * | 角色配置的 `rules` 段 | 人手写、插件写 |
+ * | 世界设计流程 | **LLM 直出**（`prompts/world-creation.md` 里的 `rules` 段） |
+ *
+ * 提示词写了「0-1，默认 0.95」是**建议**，不是**保证** ——
+ * LLM 会给出 1.8，插件作者也会写错。
+ *
+ * 而一个越界的值不会报错，只会**让世界静默崩坏**。实测 `emotion.decayRate = 1.8`：
+ * 6 个 tick 后效价从 3 涨到 46875，全程零报错。
+ *
+ * 抽规则这一阶段最该防的就是这类 bug ——
+ * **抽错了不报错，只让行为悄悄漂移**。规则抽出来之后，
+ * 「改错了不报错」的风险从代码搬到了数据里。
+ * 这张表就是把那条防线补回来：**任何入口写进来的值都会被夹回合理区间**。
+ *
+ * ## 范围本身也是数据
+ *
+ * 范围不是散落在 `validateRules()` 的 if 语句里，而是**一张表** ——
+ * 这样「哪些参数有范围」和「范围是多少」是同一份事实，
+ * 加新参数时不会出现「忘了加校验」这种漂移。
+ * `rules.test.ts` 有一条断言锁住「每个参数都必须在表里」。
+ *
+ * ## 语义
+ *
+ * - `min`/`max` 是**闭区间**，超出就夹到端点
+ * - `min`/`max` 都可以省略（表示那一侧无界）
+ * - `step` 留空表示连续值；整数参数用它约束
+ */
+export interface RuleRange {
+  min?: number;
+  max?: number;
+  /** 是否必须是整数。 */
+  integer?: boolean;
+}
+
+/**
+ * 规则参数的范围表 —— **37 个参数，一个不漏**。
+ *
+ * 键名格式：`组.参数`。
+ */
+export const RULE_RANGES: Record<string, RuleRange> = {
+  // ─── 情绪 ───
+  "emotion.valenceCurrentWeight": { min: 0, max: 1 },
+  "emotion.valenceEventWeight": { min: 0, max: 1 },
+  "emotion.arousalCurrentWeight": { min: 0, max: 1 },
+  "emotion.arousalEventWeight": { min: 0, max: 1 },
+  // 取值范围本身是引擎的硬边界，允许调，但要合理
+  "emotion.valenceMin": { min: -100, max: 0 },
+  "emotion.valenceMax": { min: 0, max: 100 },
+  "emotion.arousalMin": { min: 0, max: 50 },
+  "emotion.arousalMax": { min: 0, max: 100 },
+  "emotion.arousalBaseline": { min: 0, max: 100 },
+  "emotion.decayRate": { min: 0, max: 1 },
+  "emotion.strongValenceThreshold": { min: 0, max: 100 },
+  "emotion.strongArousalThreshold": { min: 0, max: 100 },
+  "emotion.mildArousalThreshold": { min: 0, max: 100 },
+  "emotion.boredArousalThreshold": { min: 0, max: 100 },
+
+  // ─── 需求 ───
+  "needs.baseDecay": { min: 0, max: 100 },
+  "needs.strenuousExtraDecay": { min: 0, max: 100 },
+  "needs.intuitionCoefficient": { min: 0, max: 100 },
+
+  // ─── 记忆 ───
+  "memory.relevanceWeight": { min: 0, max: 100 },
+  "memory.recencyWeight": { min: 0, max: 100 },
+  "memory.importanceWeight": { min: 0, max: 100 },
+  "memory.emotionalIntensityWeight": { min: 0, max: 100 },
+  "memory.recencyDecayRate": { min: 0, max: 100 },
+  "memory.relatedCharacterBonus": { min: 0, max: 100 },
+  "memory.relatedLocationBonus": { min: 0, max: 100 },
+  "memory.accessStrengthBonus": { min: 0, max: 100 },
+  "memory.deleteDecayFactor": { min: 0, max: 1 },
+  "memory.deleteAfterDays": { min: 0, max: 100, integer: true },
+  "memory.fadeDecayFactor": { min: 0, max: 1 },
+  "memory.fadeAfterDays": { min: 0, max: 100, integer: true },
+  "memory.faintStrengthThreshold": { min: 0, max: 100 },
+  "memory.faintAfterDays": { min: 0, max: 100, integer: true },
+  "memory.consolidateImportance": { min: 0, max: 100 },
+  "memory.consolidateAccessCount": { min: 0, max: 100, integer: true },
+  "memory.referencedDecayFactor": { min: 0, max: 1 },
+
+  // ─── 感知 ───
+  "perception.visibleValenceThreshold": { min: 0, max: 100 },
+  "perception.visibleArousalThreshold": { min: 0, max: 100 },
+
+  // ─── 动作 ───
+  "action.longActionMinutes": { min: 1, max: 1440, integer: true },
+};
+
+/**
+ * 把一个值夹进它该有的范围。
+ *
+ * 越界就夹到端点 —— **不抛错，也不丢弃**。
+ *
+ * 为什么夹而不是拒绝：规则值可能来自 LLM 或插件作者，
+ * 他们没有义务知道每个参数的合法区间。一个 1.8 的衰减率
+ * 说明作者想要「比正常更强」—— 夹到 1 已经很接近他的本意，
+ * 而直接丢弃会让世界默默退回默认值（「我明明改了规则，怎么没变？」）。
+ *
+ * 为什么不抛错：世界不该因为一个旋钮拨错就起不来。
+ * `validateRules()` 会把问题报给人看，钳制负责保证世界还活着。
+ *
+ * @param value 原始值
+ * @param range 该参数的取值范围
+ * @returns 夹进范围后的值
+ */
+export function clampRuleValue(value: number, range: RuleRange): number {
+  let out = value;
+  if (range.min !== undefined && out < range.min) out = range.min;
+  if (range.max !== undefined && out > range.max) out = range.max;
+  if (range.integer) out = Math.round(out);
+  return out;
+}
+
+/**
  * 校验规则值是否合理。
  *
  * **只报告问题，不抛错** —— 调规则的人应该看到所有问题一次说清，
  * 而不是改一个报一个。
+ *
+ * ## 注意：校验的是**原始值**，不是钳制后的值
+ *
+ * `mergeRules()` 会把越界的值夹回区间。所以拿合并后的规则来校验，
+ * 永远看不到问题 —— 证据已经被夹掉了。
+ *
+ * 要看「用户到底填了什么」，用 `validateRawRules()` 校验**未合并**的
+ * 原始片段（world.json 里的 `rules` 段、角色配置的 `rules` 段）。
+ * CLI 就是这么做的。
  *
  * @param rules 待校验的完整规则
  * @returns 问题描述数组，空数组表示没问题
@@ -531,20 +670,19 @@ export function mergeRules(
 export function validateRules(rules: WorldRules): string[] {
   const issues: string[] = [];
 
-  const e = rules.emotion;
-  for (const key of [
-    "valenceCurrentWeight",
-    "valenceEventWeight",
-    "arousalCurrentWeight",
-    "arousalEventWeight",
-  ] as const) {
-    if (e[key] < 0 || e[key] > 1) {
-      issues.push(`emotion.${key} 必须在 0-1 之间，当前 ${e[key]}`);
+  // 逐个参数对照范围表 —— 「检查哪些参数」和「范围是多少」
+  // 是同一份事实，加新参数时不会漏。
+  for (const group of RULE_GROUPS) {
+    const groupRules = rules[group] as unknown as Record<string, number>;
+    for (const [key, value] of Object.entries(groupRules)) {
+      const range = RULE_RANGES[`${group}.${key}`];
+      if (!range) continue;
+      issues.push(...checkRange(`${group}.${key}`, value, range));
     }
   }
-  if (e.decayRate < 0 || e.decayRate > 1) {
-    issues.push(`emotion.decayRate 必须在 0-1 之间，当前 ${e.decayRate}`);
-  }
+
+  // 跨参数的一致性 —— 单看范围表看不出来。
+  const e = rules.emotion;
   if (e.valenceMin >= e.valenceMax) {
     issues.push(
       `emotion.valenceMin (${e.valenceMin}) 必须小于 valenceMax (${e.valenceMax})`,
@@ -562,69 +700,89 @@ export function validateRules(rules: WorldRules): string[] {
     );
   }
 
-  const n = rules.needs;
-  if (n.baseDecay < 0) {
-    issues.push(`needs.baseDecay 不能为负，当前 ${n.baseDecay}`);
-  }
-  if (n.strenuousExtraDecay < 0) {
-    issues.push(
-      `needs.strenuousExtraDecay 不能为负，当前 ${n.strenuousExtraDecay}`,
-    );
-  }
-  if (n.intuitionCoefficient < 0) {
-    issues.push(
-      `needs.intuitionCoefficient 不能为负，当前 ${n.intuitionCoefficient}`,
-    );
+  return issues;
+}
+
+/**
+ * 校验**原始规则片段**（未合并）里的值。
+ *
+ * 这是给「用户填的东西」用的 —— world.json 的 `rules` 段、
+ * 角色配置的 `rules` 段、LLM 设计流程产出的 `rules` 段。
+ *
+ * 片段可以是**部分的**（只写了一两项），所以只检查它写了的那些。
+ *
+ * 跟 `validateRules()` 的区别：那个查合并后的完整规则，
+ * 这个查**原样**填进来的值 —— 越界的证据在这里还在。
+ *
+ * @param raw 原始规则片段（可能是部分规则，也可能形状不对）
+ * @returns 问题描述数组，空数组表示没问题
+ */
+export function validateRawRules(raw: unknown): string[] {
+  const issues: string[] = [];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return issues;
   }
 
-  const m = rules.memory;
-  for (const key of [
-    "relevanceWeight",
-    "recencyWeight",
-    "importanceWeight",
-    "emotionalIntensityWeight",
-  ] as const) {
-    if (m[key] < 0) {
-      issues.push(`memory.${key} 不能为负，当前 ${m[key]}`);
+  for (const group of RULE_GROUPS) {
+    const groupRaw = (raw as Record<string, unknown>)[group];
+    if (
+      !groupRaw ||
+      typeof groupRaw !== "object" ||
+      Array.isArray(groupRaw)
+    ) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(
+      groupRaw as Record<string, unknown>,
+    )) {
+      const range = RULE_RANGES[`${group}.${key}`];
+      if (!range) {
+        // 键不存在 —— mergeRules 会静默忽略它。
+        // 这里报出来，因为「我改了规则却没生效」最常见的原因就是这个。
+        const known = Object.keys(DEFAULT_RULES[group]);
+        if (!known.includes(key)) {
+          issues.push(
+            `规则「${group}」里没有「${key}」，会被忽略。可用：` +
+              known.join(", "),
+          );
+        }
+        continue;
+      }
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        issues.push(
+          `${group}.${key} 必须是数字，当前 ${JSON.stringify(value)}（会被忽略）`,
+        );
+        continue;
+      }
+      issues.push(...checkRange(`${group}.${key}`, value, range));
     }
   }
-  if (m.recencyDecayRate < 0) {
-    issues.push(`memory.recencyDecayRate 不能为负，当前 ${m.recencyDecayRate}`);
-  }
-  if (m.deleteDecayFactor < 0 || m.deleteDecayFactor > 1) {
-    issues.push(
-      `memory.deleteDecayFactor 必须在 0-1 之间，当前 ${m.deleteDecayFactor}`,
-    );
-  }
-  if (m.fadeDecayFactor < 0 || m.fadeDecayFactor > 1) {
-    issues.push(
-      `memory.fadeDecayFactor 必须在 0-1 之间，当前 ${m.fadeDecayFactor}`,
-    );
-  }
-  if (m.faintStrengthThreshold < 0) {
-    issues.push(
-      `memory.faintStrengthThreshold 不能为负，当前 ${m.faintStrengthThreshold}`,
-    );
-  }
 
-  const p = rules.perception;
-  if (p.visibleValenceThreshold < 0) {
-    issues.push(
-      `perception.visibleValenceThreshold 不能为负，当前 ${p.visibleValenceThreshold}`,
-    );
-  }
-  if (p.visibleArousalThreshold < 0) {
-    issues.push(
-      `perception.visibleArousalThreshold 不能为负，当前 ${p.visibleArousalThreshold}`,
-    );
-  }
+  return issues;
+}
 
-  const a = rules.action;
-  if (a.longActionMinutes <= 0) {
-    issues.push(
-      `action.longActionMinutes 必须大于 0，当前 ${a.longActionMinutes}`,
-    );
+/**
+ * 校验单个值是否在范围内。
+ *
+ * @param path 参数路径（`组.参数`），用于报错信息
+ * @param value 原始值
+ * @param range 允许的范围
+ * @returns 问题描述数组
+ */
+function checkRange(
+  path: string,
+  value: number,
+  range: RuleRange,
+): string[] {
+  const issues: string[] = [];
+  if (range.min !== undefined && value < range.min) {
+    issues.push(`${path} 不能小于 ${range.min}，当前 ${value}`);
   }
-
+  if (range.max !== undefined && value > range.max) {
+    issues.push(`${path} 不能大于 ${range.max}，当前 ${value}`);
+  }
+  if (range.integer && !Number.isInteger(value)) {
+    issues.push(`${path} 必须是整数，当前 ${value}`);
+  }
   return issues;
 }

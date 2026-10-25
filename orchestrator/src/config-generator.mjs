@@ -1,10 +1,109 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import { normalizeWorldDesign } from "./world-design-utils.mjs";
 import { buildMainAreaPoints } from "./main-area-points.mjs";
 
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
+/**
+ * 加载 core 的规则模块。
+ *
+ * ## 为什么 orchestrator 现在依赖 core 了
+ *
+ * 2.5 阶段刻意不依赖：当时只需要「一份规则名清单」，
+ * 白名单是数据，校验在测试里做，orchestrator 的运行时依赖没变。
+ *
+ * 现在不一样了 —— 设计流程的规则是 **LLM 直出**的，
+ * 而越界的值不会报错，只会让世界**静默崩坏**：
+ * 实测 `emotion.decayRate = 1.8`，6 个 tick 后效价从 3 涨到 46875，
+ * 全程零报错。engine 的 `mergeRules()` 会夹住它，世界不会崩 ——
+ * 但 **world.json 里存的 1.8 和实际在跑的 1.0 不是一回事**。
+ *
+ * 这正是 2.5 汇报里点名的「规则有一半是假的」那类问题：
+ * 规则必须**改了立刻生效，且存的和跑的是同一个值**。
+ *
+ * 所以写盘前要把规则规范化成**实际生效的值**。
+ * 这需要 core 的真实钳制逻辑，一份清单做不到。
+ *
+ * 加载 core 的**编译产物**（不是源码），不引入新的依赖。
+ *
+ * @returns core 的规则模块，或 null（加载失败不致命）
+ */
+let coreRulesCache;
+async function loadCoreRules() {
+  if (coreRulesCache !== undefined) return coreRulesCache;
+  try {
+    const mod = await import(
+      pathToFileURL(
+        join(
+          __dirname,
+          "..",
+          "..",
+          "packages",
+          "core",
+          "dist",
+          "engine",
+          "rules.js",
+        ),
+      ).href
+    );
+    coreRulesCache = mod;
+  } catch (err) {
+    // 加载不了不该让「创建世界」失败 —— engine 里还有一层钳制兜底。
+    console.warn(
+      `[ConfigGenerator] 规则规范化跳过（core 加载失败）：${err?.message ?? err}`,
+    );
+    coreRulesCache = null;
+  }
+  return coreRulesCache;
+}
+
+/**
+ * 把规则片段规范化成「实际生效的值」。
+ *
+ * 做两件事：
+ * 1. 越界的值夹回合理区间（并把问题报出来）
+ * 2. **只保留显式写过的键** —— `mergeRules()` 会补全 37 个默认值，
+ *    全塞进 world.json 就违背了「只写要改的项」的约定
+ *
+ * @param rawRules 原始规则片段（可能 null）
+ * @returns 规范化后的规则片段，或 null
+ */
+async function normalizeRulesForWrite(rawRules) {
+  if (!rawRules || typeof rawRules !== "object" || Array.isArray(rawRules)) {
+    return null;
+  }
+  const core = await loadCoreRules();
+  if (!core) return rawRules;
+
+  // 先看原始值有没有问题 —— 夹住之前先说清楚。
+  const issues = core.validateRawRules(rawRules);
+  if (issues.length > 0) {
+    console.warn("[ConfigGenerator] 规则有问题，已夹回合理区间：");
+    for (const issue of issues) console.warn(`  - ${issue}`);
+  }
+
+  const clamped = core.mergeRules(rawRules);
+  const out = {};
+  for (const [group, groupRaw] of Object.entries(rawRules)) {
+    if (!groupRaw || typeof groupRaw !== "object" || Array.isArray(groupRaw)) {
+      continue;
+    }
+    const picked = {};
+    for (const key of Object.keys(groupRaw)) {
+      if (!(key in (clamped[group] ?? {}))) continue;
+      picked[key] = clamped[group][key];
+    }
+    if (Object.keys(picked).length > 0) out[group] = picked;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export async function generateConfigs(worldDesign, worldDir, options = {}) {
   const normalizedDesign = normalizeWorldDesign(worldDesign);
+  // 规则在写盘前规范化 —— world.json 存的必须是实际在跑的值。
+  const worldRules = await normalizeRulesForWrite(normalizedDesign.rules);
   const originalPrompt =
     typeof options.originalPrompt === "string" && options.originalPrompt.trim()
       ? options.originalPrompt.trim()
@@ -85,7 +184,8 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     hearsay: normalizedDesign.hearsay || null,
     // 世界规则 —— 只写要改的项，其余走 core 的默认值。
     // 设计流程或插件可以在这里注入规则，让世界「一出生就带着某种气质」。
-    rules: normalizedDesign.rules || null,
+    // 写盘前已规范化（越界的值夹回区间）—— 存的就是跑的。
+    rules: worldRules || null,
     metadata: {
       worldName: normalizedDesign.worldName,
       worldDescription: normalizedDesign.worldDescription,
@@ -121,6 +221,14 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     tmj.tilewidth,
     tmjRegions,
     normalizedDesign.characters.length
+  );
+
+  // 角色级规则也要规范化 —— 跟世界级同一个道理。
+  // 在 map 之前先把所有角色的 rules 备好（map 回调是同步的）。
+  const characterRules = await Promise.all(
+    normalizedDesign.characters.map((charDesign) =>
+      normalizeRulesForWrite(charDesign?.rules),
+    ),
   );
 
   const characterConfigs = normalizedDesign.characters.map((charDesign, i) => {
@@ -186,8 +294,9 @@ export async function generateConfigs(worldDesign, worldDir, options = {}) {
     if (canonicalRefs) config.canonicalRefs = canonicalRefs;
     // 角色级规则覆盖 —— 设计时可以为某个角色指定特殊气质
     // （比如「这个角色记性特别短」）。只写要改的项，其余继承世界级。
+    // 写盘前已规范化（越界的值夹回区间）—— 存的就是跑的。
     if (charDesign.rules && typeof charDesign.rules === "object") {
-      config.rules = charDesign.rules;
+      config.rules = characterRules[i];
     }
 
     // 写盘挪到后面 —— 要等插件的 extendWorldConfig 钩子跑完。

@@ -318,9 +318,12 @@ function normalizeHearsay(rawHearsay) {
  * 归一化世界规则 —— 设计流程或插件可以指定「这个世界怎么运转」。
  *
  * 只做**形状检查**，不做语义校验 —— 具体的规则名是否有效、
- * 值是否合理，交给 core 的 `mergeRules()` 和 `validateRules()`。
- * orchestrator 不依赖 core（core 是 TS，orchestrator 是纯 .mjs），
- * 所以这里只保证「不是个数组、不是 null」这种最低限度。
+ * 值是否合理，交给 core 的 `mergeRules()` 和 `validateRawRules()`。
+ *
+ * **这里不依赖 core**（core 是 TS，orchestrator 是纯 .mjs，
+ * 而且 `normalizeWorldDesign()` 有 6 个同步 importer，
+ * 改成 async 会全部破）。语义校验在**写盘那一步**做 ——
+ * 见 `config-generator.mjs` 的 `normalizeRulesForWrite()`。
  *
  * @param rawRules 原始规则段
  * @returns 规则段，或 null（没有就写 null，跟 economics/weather 一致）
