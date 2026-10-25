@@ -13,13 +13,6 @@ interface RetrievalWeights {
   emotionalIntensity: number;
 }
 
-const DEFAULT_WEIGHTS: RetrievalWeights = {
-  relevance: 3,
-  recency: 2,
-  importance: 2,
-  emotionalIntensity: 1,
-};
-
 function tokenize(text: string): string[] {
   return text.toLowerCase().split(/[\s,.:;!?，。！？、]+/).filter(Boolean);
 }

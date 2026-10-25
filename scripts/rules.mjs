@@ -105,12 +105,25 @@ function listWorldDirs() {
 }
 
 function resolveWorldDir(worldId) {
-  const dirs = listWorldDirs();
+  // --world 可以给**世界 id**（output/worlds 里的目录名），
+  // 也可以给**路径**（绝对或相对仓库根）。
+  // 给路径是必要的：测试世界常在仓库外的临时目录里。
   if (worldId) {
+    const asPath = path.resolve(PROJECT_DIR, worldId);
+    if (fs.existsSync(asPath) && fs.statSync(asPath).isDirectory()) {
+      if (
+        fs.existsSync(path.join(asPath, "world.json")) ||
+        fs.existsSync(path.join(asPath, "config", "world.json"))
+      ) {
+        return asPath;
+      }
+    }
+    const dirs = listWorldDirs();
     const found = dirs.find((d) => path.basename(d) === worldId);
     if (!found) throw new Error(`找不到世界：${worldId}`);
     return found;
   }
+  const dirs = listWorldDirs();
   if (dirs.length === 0) throw new Error("没有任何世界");
   // 最近的生成世界优先
   const generated = dirs.filter((d) => d.startsWith(GENERATED_WORLDS_DIR));
@@ -153,11 +166,30 @@ function writeJson(filePath, data) {
 // ─── 路径寻址 ────────────────────────────────────────────────────────────
 
 /**
- * 把 `emotion.decayRate` 拆成组名和键名。
+ * 规则路径的别名。
+ *
+ * ROADMAP 里写的命令示例是 `set emotion.decay 0.9`，
+ * 但实际规则名是 `emotion.decayRate`（跟 `recencyDecayRate` 等保持一致的命名）。
+ * 别名让文档里的命令能直接用，同时落盘时用**规范名**。
+ *
+ * 别名 → 规范名。别名只认一个组内的简写，不做模糊匹配 ——
+ * 模糊匹配会让「打错字」变成「静默改错规则」，那比报错更糟。
+ */
+const RULE_ALIASES = {
+  "emotion.decay": "emotion.decayRate",
+  "emotion.weight": "emotion.valenceCurrentWeight",
+  "memory.decay": "memory.recencyDecayRate",
+  "memory.forget": "memory.recencyDecayRate",
+  "perception.threshold": "perception.visibleValenceThreshold",
+};
+
+/**
+ * 把 `组.键` 拆成组名和键名。
  * 写错组名要报错 —— 不能默默建一个新组。
  */
 function parseRulePath(rulePath, groups) {
-  const parts = rulePath.split(".");
+  const canonical = RULE_ALIASES[rulePath] ?? rulePath;
+  const parts = canonical.split(".");
   if (parts.length !== 2) {
     throw new Error(
       `规则路径要写成「组.键」，比如 emotion.decayRate（收到：${rulePath}）`,
@@ -206,7 +238,9 @@ async function cmdShow() {
     const charRules = core.mergeRules(charConfig.rules, worldRules);
 
     console.log(`世界：${path.basename(worldDir)}`);
-    console.log(`角色：${charId}（${charConfig.name ?? "?"}）\n`);
+    console.log(
+      `角色：${charConfig.name ?? "?"}（${charConfig.id ?? charId}）\n`,
+    );
     printRules(charRules, worldRules, core);
     return;
   }
@@ -402,17 +436,20 @@ async function cmdList() {
   }
 }
 
-function findCharacterFile(worldDir, charId) {
+function findCharacterFile(worldDir, charIdOrName) {
   const dir = charactersDir(worldDir);
   if (!dir) return null;
-  const direct = path.join(dir, `${charId}.json`);
+  const direct = path.join(dir, `${charIdOrName}.json`);
   if (fs.existsSync(direct)) return direct;
-  // 兜底：按文件里的 id 找
+  // 兜底：按文件里的 id 或 name 找
   for (const name of fs.readdirSync(dir)) {
     if (!name.endsWith(".json")) continue;
     const p = path.join(dir, name);
     try {
-      if (readJson(p).id === charId) return p;
+      const data = readJson(p);
+      if (data.id === charIdOrName || data.name === charIdOrName) {
+        return p;
+      }
     } catch {
       // 坏文件跳过
     }
