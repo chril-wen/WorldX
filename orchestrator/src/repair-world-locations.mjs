@@ -196,6 +196,24 @@ export async function repairWorld(worldDir, { dryRun = false } = {}) {
     location.adjacentLocations = Array.from(new Set(adjacent));
   }
 
+  // 中心区域要连到**所有**其它区域。
+  //
+  // 上面只保证了「每个区域 → 中心」，没保证「中心 → 每个区域」。
+  // 少了这半边，新建的 location 就是单向可达的：
+  // 角色在 main_area 看不到「镇心集市」这个选项，走不进去。
+  //
+  // 这跟 `core` 的 `normalizeLocations` 是同一个规则 ——
+  // 「中心区域连到所有真实区域，它是星形拓扑的中心」。
+  const center = nextLocations.find((l) => l.id === centerLocationId);
+  if (center) {
+    const others = nextLocations
+      .map((l) => l.id)
+      .filter((id) => id !== centerLocationId);
+    center.adjacentLocations = Array.from(
+      new Set([...(center.adjacentLocations || []), ...others]),
+    ).filter((id) => nextIds.has(id));
+  }
+
   // ── 4. 重建主区域点位（命名 + 邻接关系） ───────────────────────────────────
   const collisionLayer = findTmjLayer(tmj, "collision");
   const points = buildMainAreaPoints({

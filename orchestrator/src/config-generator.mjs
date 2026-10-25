@@ -446,19 +446,49 @@ async function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options 
     const primaryHubObjects = primaryPublicHubRegion
       ? buildObjectsForRegion(CENTER_LOCATION_ID, primaryPublicHubRegion, tmjObjects, designedRegions)
       : [];
-    const authoredLocations = tmjRegions
-      .filter((region) => getRegionId(region) !== primaryPublicHubId)
-      .map((region) => {
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 主公共枢纽**不再被丢出 locations**。
+    //
+    // 改造前这里有一行 `.filter((region) => getRegionId(region) !== primaryPublicHubId)`
+    // —— 挑中的 hub 区域被剔除，改由 `main_area` 承接它的物件。
+    //
+    // 但 **TMJ 里那个框原封不动留着**。于是：
+    //
+    // - 客户端（MapManager 从 TMJ 读）看得见 `town_market_square`，画得出框、显示得出名字
+    // - 服务端（WorldManager 从 world.json 读）不认识这个 id，角色永远去不了
+    //
+    // 这就是「看得见但用不了」的区域。仓库里的 `repair-world-locations.mjs`
+    // 规则 1 写着「TMJ 里每个 region，都要在 world.json 里有一个同 id 的 location」——
+    // 现状违反了这条不变量。
+    //
+    // 修法**不是**从 TMJ 删框 —— 那个框在地图上是真实存在的物理场所（镇心集市），
+    // 删了地图上就少一块地方。修法是**让 world.json 认下它**。
+    //
+    // hub 的物件**仍然只挂到 main_area**（角色在逻辑枢纽里就能用茶壶，
+    // 这是既有行为，不动）。
+    // ─────────────────────────────────────────────────────────────────────
+    const authoredLocations = tmjRegions.map((region) => {
         const props = getObjectProperties(region);
         const regionId = getRegionId(region);
         const designedLoc = findMatchingLocation(regionId, props, designedRegions);
-        const regionObjects = buildObjectsForRegion(regionId, region, tmjObjects, designedRegions);
+        const isPrimaryHub = primaryPublicHubId !== null && regionId === primaryPublicHubId;
+        // hub 的物件归 main_area（下面单独合并），这里不重复挂。
+        const regionObjects = isPrimaryHub
+          ? []
+          : buildObjectsForRegion(regionId, region, tmjObjects, designedRegions);
 
+        // 邻接用**真实 id**。
+        //
+        // 改造前这里把邻接 hub 的区域映射成 `CENTER_LOCATION_ID` ——
+        // 因为那时 hub 不是 location，只能借 main_area 中转。
+        // 现在 hub 自己就是 location了，直接用它的 id。
+        //
+        // main_area 仍然连到所有区域（`normalizeLocations` 负责），
+        // 所以拓扑照样连通。
         const adjacentLocations = tmjRegions
           .filter((other) => other !== region && regionsAreAdjacent(region, other, tmj.tilewidth * 3))
-          .map((other) =>
-            getRegionId(other) === primaryPublicHubId ? CENTER_LOCATION_ID : getRegionId(other),
-          );
+          .map((other) => getRegionId(other));
 
         const indoor = designedLoc?.indoor === true || designedLoc?.indoor === false
           ? designedLoc.indoor
@@ -473,7 +503,7 @@ async function buildLocations(tmjRegions, tmjObjects, worldDesign, tmj, options 
         };
         if (indoor !== undefined) result.indoor = indoor;
         return result;
-      });
+    });
 
     const { normalizeLocations } = await loadCoreLocations();
     const locations = normalizeLocations(
