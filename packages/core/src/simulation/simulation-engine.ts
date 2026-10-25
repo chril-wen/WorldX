@@ -1133,8 +1133,12 @@ export class SimulationEngine {
           for (const refId of insight.relatedMemoryIds) {
             try {
               const refMem = this.storage.memories.getMemory(refId);
+              // 被洞见引用的旧记忆，衰减得更快 —— 它已经被新洞见吸收了。
+              // 系数是规则（memory.referencedDecayFactor），不是写死的。
+              const rules = this.characterManager.getRulesFor(profile.id);
               this.storage.memories.updateMemory(refId, {
-                decayFactor: refMem.decayFactor * 0.3,
+                decayFactor:
+                  refMem.decayFactor * rules.memory.referencedDecayFactor,
               });
             } catch {
               // referenced memory may not exist

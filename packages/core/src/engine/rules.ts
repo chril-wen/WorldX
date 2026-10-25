@@ -254,6 +254,16 @@ export interface MemoryRules {
    * 默认 3。
    */
   consolidateAccessCount: number;
+
+  /**
+   * 被新洞见引用时，旧记忆的衰减因子乘以这个系数。
+   *
+   * 洞见是「从旧记忆里提炼出来的新认知」。旧记忆被引用，说明它还有价值，
+   * 但同时它也被新洞见**吸收**了 —— 所以它应该衰减得比平时快。
+   *
+   * 默认 0.3。
+   */
+  referencedDecayFactor: number;
 }
 
 /**
@@ -343,6 +353,7 @@ export const DEFAULT_RULES: WorldRules = {
     faintAfterDays: 5,
     consolidateImportance: 6,
     consolidateAccessCount: 3,
+    referencedDecayFactor: 0.3,
   },
   perception: {
     visibleValenceThreshold: 2,

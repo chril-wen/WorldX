@@ -180,6 +180,9 @@ describe("规则默认值 —— 逐个数值对齐改造前的硬编码", () =>
     expect(m.faintAfterDays).toBe(5);
     expect(m.consolidateImportance).toBe(6);
     expect(m.consolidateAccessCount).toBe(3);
+    // 被洞见引用的旧记忆，衰减因子乘这个系数
+    // （原代码写死在 simulation-engine.ts 里，阶段 2.5 补漏时外置的）
+    expect(m.referencedDecayFactor).toBe(0.3);
   });
 
   it("感知阈值与长动作门限", () => {
@@ -196,6 +199,17 @@ describe("规则默认值 —— 逐个数值对齐改造前的硬编码", () =>
       "perception",
       "action",
     ]);
+  });
+
+  it("规则参数总数是 37（加参数时要改这里）", () => {
+    // 这个数字的作用不是「卡住」规则层不许长，
+    // 是**逼着改它的人想清楚**：加一个参数意味着多一个可调的旋钮，
+    // 意味着 world.json 里多一个可能的键。得是有意的。
+    let count = 0;
+    for (const group of RULE_GROUPS) {
+      count += Object.keys(DEFAULT_RULES[group]).length;
+    }
+    expect(count).toBe(37);
   });
 });
 
