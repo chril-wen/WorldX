@@ -153,10 +153,22 @@ for (const { name, configPath } of worldDirs) {
   );
 
   // 2. 逐字段：除新增的两个字段外，原有内容不变
-  const migratedRest = { ...migrated };
-  delete migratedRest.schemaVersion;
-  delete migratedRest.centerLocationId;
-  check("迁移不丢数据（除新增字段外逐字段相等）", migratedRest, raw);
+  //
+  // **要按「raw 里的键」逐个比，不能把 migrated 删掉新字段后整体比** ——
+  // 因为磁盘上的 world.json **可能已经是 v2**（迁移是在读取时生效的，
+  // 但 `WorldManager.addLocation()` 会把内存态写回磁盘 —— 写回的东西
+  // 已经带上了新字段）。那种情况下 raw 里也有 schemaVersion，
+  // 删掉 migrated 的新字段再跟 raw 比，必然不等 —— 但那不是「丢数据」。
+  //
+  // 真正要守的是：**raw 里有的每个字段，迁移后都还在、且值一样**。
+  const NEW_FIELDS = ["schemaVersion", "centerLocationId"];
+  const originalFields = Object.fromEntries(
+    Object.entries(raw).filter(([key]) => !NEW_FIELDS.includes(key)),
+  );
+  const migratedFields = Object.fromEntries(
+    Object.entries(migrated).filter(([key]) => !NEW_FIELDS.includes(key)),
+  );
+  check("迁移不丢数据（除新增字段外逐字段相等）", migratedFields, originalFields);
 
   // 3. 归一化：改造前后逐字段相等
   const legacy = legacyNormalizeLocations(
@@ -184,12 +196,21 @@ for (const { name, configPath } of worldDirs) {
   );
 
   // 6. 邻接图：中心区域连到所有其它区域
+  //
+  // **比集合，不比顺序** ——
+  // 中心的邻接列表的顺序是「磁盘上的存储顺序」，
+  // 而 `others` 是 locations 数组的顺序。两者都包含同样的区域，
+  // 但顺序未必一致（真实世界的 center.adjacentLocations 里
+  // `town_market_square` 排在末尾，而 locations 数组里它在中间）。
+  //
+  // 这条断言的本意是「中心连到所有其它区域」—— 顺序不是重点。
+  // 顺序本身由上面「归一化结果与改造前逐字段相等」那条守住。
   const center = actual.find((l) => l.id === migrated.centerLocationId);
   const others = actual.filter((l) => l.id !== migrated.centerLocationId).map((l) => l.id);
   check(
     "中心区域连到所有其它区域",
-    center.adjacentLocations,
-    others,
+    [...center.adjacentLocations].sort(),
+    [...others].sort(),
   );
 
   console.log("");
