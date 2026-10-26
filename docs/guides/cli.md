@@ -61,6 +61,7 @@ own-world help
 | `events` | 看事件流 |
 | `rules` | 看 / 改世界规则 |
 | `timeline` | 快照 / 分叉 / 对比 |
+| `plugins` | 列出已加载的插件（秒回，不跑钩子） |
 
 ### 通用选项
 

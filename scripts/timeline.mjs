@@ -24,6 +24,7 @@ import {
   listWorldDirs,
   resolveWorldDir,
 } from "../apps/cli/src/lib/world-paths.mjs";
+import { buildCharacterNameMap } from "../apps/cli/src/lib/name-maps.mjs";
 // server 的依赖（better-sqlite3 等）装在 server/node_modules，
 // 从 scripts/ 里 import 解析不到 —— 显式指到 server 目录。
 const SERVER_DEPS = (spec) =>
@@ -268,19 +269,37 @@ async function cmdDiff() {
     console.log(`\n分叉自 ${cmp.forkedFrom.timelineId} @ day ${cmp.forkedFrom.day} tick ${cmp.forkedFrom.tick}`);
   }
 
+  // 角色名从世界配置读 —— diff 里显示裸 id（`char_1792494562655`）
+  // 的话，人根本不知道那是谁。跟 CLI 其他命令同一份映射。
+  const characterNames = buildCharacterNameMap(worldDir);
+  const nameOf = (id) => characterNames.get(id) ?? id;
+
+  // `currentAction` 的值也可能是内部 id（`post_dialogue`）——
+  // 翻成人话，跟 CLI 其他地方同一份（core 的表）。
+  const { actionLabel } = await import("../packages/core/src/simulation/event-format.ts");
+
+  /** 把 diff 的字段值按类型格式化 —— 内部 action 翻人话。 */
+  const fmtValue = (field, value) => {
+    if (value === null || value === undefined) return "null";
+    if (field === "currentAction") return actionLabel(value, null);
+    return JSON.stringify(value);
+  };
+
   if (cmp.characters.length === 0) {
     console.log("\n角色状态：无差异");
   } else {
     console.log("\n角色状态差异：");
     for (const c of cmp.characters) {
       if (c.onlyIn === "a") {
-        console.log(`  ${c.characterId}: 只在 A 中存在`);
+        console.log(`  ${nameOf(c.characterId)}: 只在 A 中存在`);
       } else if (c.onlyIn === "b") {
-        console.log(`  ${c.characterId}: 只在 B 中存在`);
+        console.log(`  ${nameOf(c.characterId)}: 只在 B 中存在`);
       } else {
-        console.log(`  ${c.characterId}:`);
+        console.log(`  ${nameOf(c.characterId)}:`);
         for (const f of c.fields) {
-          console.log(`    ${f.field}: A=${JSON.stringify(f.a)}  B=${JSON.stringify(f.b)}`);
+          console.log(
+            `    ${f.field}: A=${fmtValue(f.field, f.a)}  B=${fmtValue(f.field, f.b)}`,
+          );
         }
       }
     }
@@ -289,7 +308,17 @@ async function cmdDiff() {
   if (cmp.memories.length > 0) {
     console.log("\n记忆差异：");
     for (const m of cmp.memories) {
-      console.log(`  ${m.characterId}: 共有 ${m.common}，只 A 有 ${m.onlyInA}，只 B 有 ${m.onlyInB}`);
+      console.log(
+        `  ${nameOf(m.characterId)}: 共有 ${m.common}，只 A 有 ${m.onlyInA}，只 B 有 ${m.onlyInB}`,
+      );
+      // 光有数量没用 —— 「只 B 有 3」得让人知道差的是什么。
+      // 这是「另一种可能」最该看的部分。
+      for (const mem of m.onlyInBMemories ?? []) {
+        console.log(`    仅 B：${mem.content}`);
+      }
+      for (const mem of m.onlyInAMemories ?? []) {
+        console.log(`    仅 A：${mem.content}`);
+      }
     }
   }
 }

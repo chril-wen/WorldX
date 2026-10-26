@@ -186,6 +186,30 @@ describe("需要 server 的命令", () => {
   });
 });
 
+describe("own-world plugins", () => {
+  it("列出已加载的插件（不需要 server、不需要 LLM）", () => {
+    // 回归测试：验证插件加载**不需要**跑世界生成。
+    //
+    // 之前唯一能触发插件加载的路径是 `npm run create` ——
+    // 那要几分钟、要 LLM、要真的生成一个世界。
+    // 「我加了个插件文件，它被认出来了吗」这个问题没有便宜的答案。
+    const { stdout, code } = run(["plugins"]);
+    expect(code).toBe(0);
+    // 仓库里有个 economy 插件（`plugins/economy.ts`）
+    expect(stdout).toContain("economy");
+  });
+
+  it("--json 输出可解析", () => {
+    const { stdout, code } = run(["plugins", "--json"]);
+    expect(code).toBe(0);
+    // registry 会打一行 `[Plugin] 已加载 ...` 到 stdout ——
+    // JSON 从第一个 `{` 开始截。
+    const json = JSON.parse(stdout.slice(stdout.indexOf("{")));
+    expect(Array.isArray(json.plugins)).toBe(true);
+    expect(json.plugins.some((p) => p.name === "economy")).toBe(true);
+  });
+});
+
 describe("own-world timeline", () => {
   it("list 能跑（不需要 server）", () => {
     const { code } = run(["timeline", "list"]);

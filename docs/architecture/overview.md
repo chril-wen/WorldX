@@ -95,6 +95,7 @@ import { parseTmj } from "@own-world/core";                        // ❌
 | 你要改… | 去哪 | 关键文件 |
 |---|---|---|
 | 角色的**决策 / 对话 / 行动** | `packages/core/src/simulation/` | `perceiver.ts` → `decision-maker.ts` → `dialogue-generator.ts` → `action-executor.ts` |
+| **加一个世界动作**（通用交互） | [配置参考 §5](../../reference/configuration.md#5-世界动作-worldactions) | `config/world.json` 的 `worldActions` 段；执行在 `action-executor.ts` |
 | **情绪 / 需求 / 记忆** | `packages/core/src/engine/` | `emotion-manager.ts` / `needs-manager.ts` / `memory-manager.ts` |
 | **世界规则**（数值） | `packages/core/src/engine/rules.ts` | 规则是**数据**（`RULE_RANGES`），不是代码里的常数 |
 | **世界配置**（结构） | `packages/core/src/contracts/world.ts` | `LocationConfig` / `ObjectConfig` / `MainAreaPointConfig` |
@@ -264,4 +265,4 @@ orchestrator 生成完世界就退出了，跟 core 的模拟引擎是两套生�
 | [插件开发指南](../guides/plugins.md) | 从零写一个插件 |
 | [CLI 指南](../guides/cli.md) | 命令行怎么用 |
 | `docs/REFACTOR-PLAN.md` | 重构的总体计划与历史 |
-| `E:\WordX\workspace\PROJECT.md` | 产品定位与审查基准（**仓库外**） |
+| `E:\WordX\OWN-World-design\PROJECT.md` | 产品定位与审查基准（**仓库外**） |

@@ -15,6 +15,7 @@
 | **地图上画的东西**（区域框、碰撞、可交互物） | [配置参考](reference/configuration.md) | `map/06-final.tmj` |
 | **世界的内容**（地点、物件、角色、规则） | [配置参考](reference/configuration.md) | `config/world.json` |
 | **角色怎么决策、怎么对话** | [架构总览 §4](architecture/overview.md#4-一次模拟-tick-走过的路) | `packages/core/src/simulation/` |
+| **加一个世界动作**（通用交互） | [配置参考 §5](reference/configuration.md#5-世界动作-worldactions) | `config/world.json` 的 `worldActions` 段 |
 | **情绪 / 需求 / 记忆的算法** | [架构总览 §3](architecture/overview.md#3-模块地图) | `packages/core/src/engine/` |
 | **规则数值** | [规则外置指南](guides/world-rules.md) | `packages/core/src/engine/rules.ts` |
 | **世界生成流程** | [架构总览 §5](architecture/overview.md#5-世界生成走过的路) | `orchestrator/src/index.mjs` |
@@ -81,7 +82,7 @@
 | [EXPERIENCE.md](EXPERIENCE.md) | 阶段 6 的**逐点体验清单** —— 验收时照着走 |
 | [ATTRIBUTION.md](ATTRIBUTION.md) | 许可证、作者归属、第三方依赖 |
 | [REFACTOR-PLAN.md](REFACTOR-PLAN.md) | 重构的总体计划与历史 |
-| `E:\WordX\workspace\PROJECT.md` | 产品定位与审查基准（**仓库外**） |
+| `E:\WordX\OWN-World-design\PROJECT.md` | 产品定位与审查基准（**仓库外**） |
 
 ---
 

@@ -34,6 +34,21 @@ export interface MemoryDiff {
   common: number;
   /** 共有记忆里内容不同的条数 */
   diverged: number;
+  /**
+   * 只在 A 有的记忆**内容**。
+   *
+   * 只给数量是不够的 —— 「只 B 有 3」让人不知道差的是什么，
+   * 而这正是「另一种可能」最该看的部分。
+   */
+  onlyInAMemories: MemoryEntry[];
+  /** 只在 B 有的记忆内容 */
+  onlyInBMemories: MemoryEntry[];
+}
+
+export interface MemoryEntry {
+  content: string;
+  gameDay: number;
+  gameTick: number;
 }
 
 export interface TimelineComparison {
@@ -176,24 +191,31 @@ export function compareTimelineStates(
     .map((charId) => {
       const setA = byCharacter.get(charId)!.a;
       const setB = byCharacter.get(charId)!.b;
-      let onlyInA = 0;
-      let onlyInB = 0;
       let common = 0;
+      const onlyInAMemories: MemoryEntry[] = [];
+      const onlyInBMemories: MemoryEntry[] = [];
       for (const key of setA) {
-        if (setB.has(key)) common++;
-        else onlyInA++;
+        if (setB.has(key)) {
+          common++;
+        } else {
+          onlyInAMemories.push(viewA.memories.get(key)!);
+        }
       }
       for (const key of setB) {
-        if (!setA.has(key)) onlyInB++;
+        if (!setA.has(key)) {
+          onlyInBMemories.push(viewB.memories.get(key)!);
+        }
       }
       // 内容相同但时间不同的记忆算「分叉后各自产生的」——
       // 已经在 onlyInA / onlyInB 里体现了
       return {
         characterId: charId,
-        onlyInA,
-        onlyInB,
+        onlyInA: onlyInAMemories.length,
+        onlyInB: onlyInBMemories.length,
         common,
         diverged: 0,
+        onlyInAMemories,
+        onlyInBMemories,
       };
     })
     .filter((m) => m.onlyInA > 0 || m.onlyInB > 0 || m.common > 0);

@@ -82,6 +82,12 @@ export const COMMANDS = {
     load: () => import("./timeline.mjs"),
     run: (m, ctx) => m.cmdTimeline(ctx),
   },
+  plugins: {
+    summary: "列出已加载的插件（不跑钩子）",
+    needsServer: false,
+    load: () => import("./plugins.mjs"),
+    run: (m, ctx) => m.cmdPlugins(ctx),
+  },
   help: {
     summary: "显示这份帮助",
     needsServer: false,

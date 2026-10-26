@@ -160,11 +160,17 @@ export default plugin;
 EOF
 ```
 
-然后跑任何带 `plugins/` 的命令（`timeline list` 就够），
+然后跑这个（**秒回**，不用 LLM、不用生成世界）：
+
+```bash
+npm run cli -- plugins
+```
+
 应该看到 `[Plugin] 已加载 2 个插件：economy[extendWorldConfig], hello[design]`。
 
-**看点**：从打开文档到插件被加载，你花了多久？
+**看点**：从打开文档到插件被列出来，你花了多久？
 有没有哪一步需要翻代码才知道怎么办？**那就是文档没写清楚的地方。**
+（想看钩子真的跑起来，才需要 `npm run create "..."` —— 那要几分钟。）
 
 ---
 

@@ -79,7 +79,32 @@ const plugin: WorldPlugin = {
 export default plugin;
 ```
 
-**就这么长。** 放进 `plugins/hello.ts`，跑一次创建世界：
+**就这么长。** 放进 `plugins/hello.ts`。
+
+### 先确认它被认出来了（不用跑生成）
+
+```bash
+npm run cli -- plugins
+```
+
+输出：
+
+```
+[Plugin] 已加载 2 个插件：economy[extendWorldConfig], hello[design]
+
+插件（2）
+───────
+  economy  →  extendWorldConfig
+  hello  →  design
+```
+
+`hello` 在列表里，说明**文件被读到了、名字被认了、钩子被识别了**。
+这个命令只读文件系统 —— **秒回，不要 LLM，不要生成世界**。
+
+> 加插件文件**不用登记** —— `plugins/` 目录里的文件全都算。
+> `config/plugins.json` 只用来**调顺序**和**关掉某个**。
+
+### 再看钩子真的跑起来
 
 ```bash
 npm run create "一个赛博朋克的地下酒吧"
@@ -306,7 +331,8 @@ const { value } = await runHook(plugins, "design", myDesign, ctx);
 - [ ] **不就地改参数**，要改就返回新对象
 - [ ] 用 `ctx.logPrefix` 打日志
 - [ ] 纯逻辑，不调 LLM
-- [ ] 跑一次 `npm run create "..."`，确认日志里有你的插件名
+- [ ] `npm run cli -- plugins` 能看到它（秒回，验「被认出来了」）
+- [ ] 跑一次 `npm run create "..."`，确认日志里有你的插件名（验「钩子真的跑了」）
 
 ---
 
