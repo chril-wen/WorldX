@@ -429,6 +429,13 @@ const { initDatabase, closeDb } = await import(
  */
 async function runOnce(worldRules, label) {
   const originalRaw = fs.readFileSync(jsonPath, "utf-8");
+  // 记下原始的 mtime —— 复原时要一并还原。
+  //
+  // **为什么重要**：CLI 的「当前世界」= `output/worlds/` 下 mtime 最新的那个。
+  // 内容复原了但 mtime 变了，那个世界就凭空成了「最新」——
+  // 用户的 `own-world status` 会指向一个刚被测试碰过的世界。
+  const originalStat = fs.statSync(jsonPath);
+  const originalMtime = originalStat.mtime;
 
   // 1. 把规则写进 world.json（世界级）
   const raw = JSON.parse(originalRaw);
@@ -539,8 +546,17 @@ async function runOnce(worldRules, label) {
 
     return summary;
   } finally {
-    // 复原 world.json
+    // 复原 world.json —— 内容**和 mtime** 都复原。
+    //
+    // 只复原内容不够：mtime 变了的话，这个世界就成了
+    // `output/worlds/` 下「最新」的那个 —— CLI 会把它当成当前世界。
+    // 一次测试不该改变用户看到的「当前世界」。
+    //
+    // 注意 `utimesSync` 的参数顺序是 **(path, atime, mtime)**。
+    // 写反了的话 mtime 会被设成 atime —— 症状是「复原了，但 mtime
+    // 变成了文件最后被读的时间」，看起来像没生效。
     fs.writeFileSync(jsonPath, originalRaw, "utf-8");
+    fs.utimesSync(jsonPath, originalStat.atime, originalMtime);
     // 复原 Math.random
     restoreRandom?.();
     try {
