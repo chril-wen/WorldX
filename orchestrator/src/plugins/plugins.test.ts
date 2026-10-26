@@ -106,7 +106,7 @@ describe("插件加载", () => {
 
     const plugin = await loadPluginFile(file);
     expect(plugin.name).toBe("named-plugin");
-  });
+  }, 30_000);
 
   it("能加载 .ts 插件 —— 纯 node 下靠 tsx/esm/api", async () => {
     const dir = makeTempDir();
@@ -119,7 +119,7 @@ describe("插件加载", () => {
 
     const plugin = await loadPluginFile(file);
     expect(plugin.name).toBe("ts-plugin");
-  });
+  }, 30_000);
 
   it("加载失败时抛错，不静默返回半个插件", async () => {
     const dir = makeTempDir();

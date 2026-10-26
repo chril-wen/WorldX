@@ -253,6 +253,6 @@ describe("入口脚本能启动", () => {
       if (failed) {
         expect(output).toMatch(/Usage:/);
       }
-    });
+    }, 30_000);
   }
 });

@@ -24,6 +24,7 @@ export { normalizeLocations } from "./engine/location-normalizer.js";
 export {
   DEFAULT_TILE_SIZE,
   parseTmj,
+  findTmjLayer,
   toInteractiveObjects,
   toLocationRects,
   gridToPixel,
