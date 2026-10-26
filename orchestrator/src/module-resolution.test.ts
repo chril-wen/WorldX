@@ -43,11 +43,24 @@ const SCAN_DIRS = ["orchestrator", "generators", "shared"];
  * 为什么不扫 client/ 和 packages/：那两个是 TypeScript，
  * 走 tsc 编译，import 路径写错**编译期就会报错**，不会静默。
  * 只有 .mjs 这一半是运行时才解析的 —— 也就是会静默的那一半。
+ *
+ * ## 为什么跳过 `.tmp-*` 目录
+ *
+ * `plugins.test.ts` 会在 `orchestrator/src/.tmp-plugin-tests/` 里
+ * 建临时插件文件，测完就删。
+ *
+ * 两条测试**并行跑**的时候，扫描器可能正好读到那个目录 ——
+ * 然后文件在 `readFileSync` 之前被删了，抛 ENOENT。
+ *
+ * 这不是产品代码的 bug，是**测试自己的竞态**：
+ * 扫的是别人的临时工作区。跳过以 `.tmp-` 开头的目录。
  */
 function collectMjsFiles(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules") continue;
+    // 别的测试的临时工作区 —— 扫它会撞上文件被删的瞬间
+    if (entry.name.startsWith(".tmp-")) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       collectMjsFiles(full, out);

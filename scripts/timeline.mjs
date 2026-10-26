@@ -16,9 +16,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_DIR = path.resolve(__dirname, "..");
+import {
+  GENERATED_WORLDS_DIR,
+  LIBRARY_WORLDS_DIR,
+  PROJECT_DIR,
+  hasTimelines,
+  listWorldDirs,
+  resolveWorldDir,
+} from "../apps/cli/src/lib/world-paths.mjs";
 // server 的依赖（better-sqlite3 等）装在 server/node_modules，
 // 从 scripts/ 里 import 解析不到 —— 显式指到 server 目录。
 const SERVER_DEPS = (spec) =>
@@ -31,8 +36,6 @@ const SERVER_PKG = (name) => {
     path.join(PROJECT_DIR, "server", "node_modules", name, pkg.main ?? "index.js"),
   ).href;
 };
-const GENERATED_WORLDS_DIR = path.join(PROJECT_DIR, "output", "worlds");
-const LIBRARY_WORLDS_DIR = path.join(PROJECT_DIR, "library", "worlds");
 
 const args = process.argv.slice(2);
 
@@ -43,32 +46,18 @@ function arg(flag, fallback = null) {
 const has = (flag) => args.includes(flag);
 
 // ─── 找世界目录 ─────────────────────────────────────────────────────────────
+//
+// 世界寻址现在住在 `apps/cli/src/lib/world-paths.mjs` —— 跟 CLI 共用一份。
+// 这里用「有 timelines/ 目录」的判据（时间线工具关心的世界）
+// 而不是「有 world.json」。
 
-function listWorldDirs() {
-  const out = [];
-  for (const base of [GENERATED_WORLDS_DIR, LIBRARY_WORLDS_DIR]) {
-    if (!fs.existsSync(base)) continue;
-    for (const name of fs.readdirSync(base)) {
-      const dir = path.join(base, name);
-      if (fs.existsSync(path.join(dir, "timelines"))) out.push(dir);
-    }
-  }
-  return out;
-}
-
-function resolveWorldDir(worldId) {
-  const dirs = listWorldDirs();
-  if (worldId) {
-    const found = dirs.find((d) => path.basename(d) === worldId);
-    if (!found) throw new Error(`World not found: ${worldId}`);
-    return found;
-  }
-  if (dirs.length === 0) throw new Error("No world with timelines found");
-  // 最近的生成世界优先
-  const generated = dirs.filter((d) => d.startsWith(GENERATED_WORLDS_DIR));
-  const pool = generated.length > 0 ? generated : dirs;
-  pool.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  return pool[0];
+/**
+ * 找世界目录 —— 时间线工具的判据。
+ *
+ * 包装一层，省得每个调用点都写 `hasTimelines`。
+ */
+function resolveTimelineWorld(worldId) {
+  return resolveWorldDir(worldId, hasTimelines);
 }
 
 // ─── 读时间线 ───────────────────────────────────────────────────────────────
@@ -101,7 +90,7 @@ function dbPath(worldDir, timelineId) {
 // ─── 命令 ───────────────────────────────────────────────────────────────────
 
 function cmdList() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   console.log(`World: ${path.basename(worldDir)}  (${worldDir})\n`);
   const timelines = listTimelines(worldDir);
   if (timelines.length === 0) {
@@ -118,7 +107,7 @@ function cmdList() {
 }
 
 async function cmdSnapshots() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   const timelineId = args[1];
   if (!timelineId) throw new Error("用法：npm run timeline -- snapshots <timelineId>");
 
@@ -142,7 +131,7 @@ async function cmdSnapshots() {
 }
 
 async function cmdSnapshot() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   const timelineId = args[1];
   if (!timelineId) throw new Error("用法：npm run timeline -- snapshot <timelineId> [--desc \"...\"]");
 
@@ -195,7 +184,7 @@ async function queryServerBusy() {
 }
 
 async function cmdRestore() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   const timelineId = args[1];
   const snapshotId = args[2];
   if (!timelineId || !snapshotId) {
@@ -232,7 +221,7 @@ async function cmdRestore() {
 }
 
 async function cmdFork() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   const timelineId = args[1];
   const snapshotId = args[2];
   if (!timelineId || !snapshotId) {
@@ -249,7 +238,7 @@ async function cmdFork() {
 }
 
 async function cmdDiff() {
-  const worldDir = resolveWorldDir(arg("--world"));
+  const worldDir = resolveTimelineWorld(arg("--world"));
   const a = args[1];
   const b = args[2];
   if (!a || !b) throw new Error("用法：npm run timeline -- diff <timelineA> <timelineB>");

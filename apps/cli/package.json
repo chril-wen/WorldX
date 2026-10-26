@@ -1,0 +1,15 @@
+{
+  "name": "@worldx/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WorldX 命令行工具 —— 生成世界、看状态、跑 tick、快照/分叉/对比",
+  "bin": {
+    "worldx": "./src/index.mjs"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {}
+}

@@ -8,6 +8,7 @@ export default defineConfig({
       "client/src/**/*.test.ts",
       "orchestrator/src/**/*.test.ts",
       "packages/*/src/**/*.test.ts",
+      "apps/*/test/**/*.test.mjs",
     ],
     environment: "node",
     globals: false,

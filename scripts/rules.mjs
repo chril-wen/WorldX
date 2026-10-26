@@ -32,11 +32,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_DIR = path.resolve(__dirname, "..");
-const GENERATED_WORLDS_DIR = path.join(PROJECT_DIR, "output", "worlds");
-const LIBRARY_WORLDS_DIR = path.join(PROJECT_DIR, "library", "worlds");
+import {
+  GENERATED_WORLDS_DIR,
+  LIBRARY_WORLDS_DIR,
+  PROJECT_DIR,
+  hasWorldJson,
+  listWorldDirs,
+  resolveWorldDir,
+  worldJsonPath,
+} from "../apps/cli/src/lib/world-paths.mjs";
 
 // core 的规则类型和校验逻辑是 TypeScript —— 用 tsx 加载。
 // 走 dist/ 的话要先构建；这里直接吃源码，跟 vitest 走的是同一份逻辑。
@@ -87,61 +91,13 @@ async function loadCoreRules() {
 }
 
 // ─── 找世界目录 ──────────────────────────────────────────────────────────
-
-function listWorldDirs() {
-  const out = [];
-  for (const base of [GENERATED_WORLDS_DIR, LIBRARY_WORLDS_DIR]) {
-    if (!fs.existsSync(base)) continue;
-    for (const name of fs.readdirSync(base)) {
-      const dir = path.join(base, name);
-      if (
-        fs.existsSync(path.join(dir, "world.json")) ||
-        fs.existsSync(path.join(dir, "config", "world.json"))
-      ) {
-        out.push(dir);
-      }
-    }
-  }
-  return out;
-}
-
-function resolveWorldDir(worldId) {
-  // --world 可以给**世界 id**（output/worlds 里的目录名），
-  // 也可以给**路径**（绝对或相对仓库根）。
-  // 给路径是必要的：测试世界常在仓库外的临时目录里。
-  if (worldId) {
-    const asPath = path.resolve(PROJECT_DIR, worldId);
-    if (fs.existsSync(asPath) && fs.statSync(asPath).isDirectory()) {
-      if (
-        fs.existsSync(path.join(asPath, "world.json")) ||
-        fs.existsSync(path.join(asPath, "config", "world.json"))
-      ) {
-        return asPath;
-      }
-    }
-    const dirs = listWorldDirs();
-    const found = dirs.find((d) => path.basename(d) === worldId);
-    if (!found) throw new Error(`找不到世界：${worldId}`);
-    return found;
-  }
-  const dirs = listWorldDirs();
-  if (dirs.length === 0) throw new Error("没有任何世界");
-  // 最近的生成世界优先
-  const generated = dirs.filter((d) => d.startsWith(GENERATED_WORLDS_DIR));
-  const pool = generated.length > 0 ? generated : dirs;
-  pool.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  return pool[0];
-}
-
-function worldJsonPath(worldDir) {
-  for (const p of [
-    path.join(worldDir, "world.json"),
-    path.join(worldDir, "config", "world.json"),
-  ]) {
-    if (fs.existsSync(p)) return p;
-  }
-  throw new Error(`${worldDir} 里没有 world.json`);
-}
+//
+// 世界寻址（`listWorldDirs` / `resolveWorldDir` / `worldJsonPath`）
+// 现在住在 `apps/cli/src/lib/world-paths.mjs` —— 跟 CLI 共用一份。
+//
+// 改造前 `rules.mjs` 和 `timeline.mjs` 各写了一份同样的逻辑，
+// 而且**已经开始漂移**：`timeline.mjs` 不支持 `--world` 传路径。
+// 同一个参数在两个 CLI 里行为不同，这种差异最难查。
 
 function charactersDir(worldDir) {
   for (const p of [

@@ -7,6 +7,7 @@
   "scripts": {
     "postinstall": "cd client && npm install && cd ../server && npm install && cd ../orchestrator && npm install && cd ../generators && npm install",
     "create": "node orchestrator/src/index.mjs",
+    "cli": "node apps/cli/src/index.mjs",
     "dev": "node scripts/dev.mjs",
     "stop": "node scripts/stop-dev.mjs",
     "dev:server": "cd server && npm run dev",

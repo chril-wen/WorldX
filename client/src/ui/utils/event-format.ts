@@ -1,5 +1,6 @@
 import i18n from "../../i18n";
 import type { CharacterInfo, LocationInfo, SimulationEvent } from "../../types/api";
+import { extractEventActionName } from "@worldx/core/simulation/event-format.js";
 
 const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
@@ -67,7 +68,10 @@ export function formatEventSummary(
   const targetName = formatCharacterName(event.targetId, context.characterNames);
   const currentLocation = formatLocationName(event.location, context.locationNames);
   const actionName = formatActionName(
-    event.data?.actionName ?? event.data?.interactionName ?? event.data?.action ?? event.data?.interactionId ?? event.data?.actionType,
+    // **取值路径在 core 里** —— CLI 也用同一份。
+    // 改造前这里是客户端私有的 `??` 链，CLI 只能自己再写一遍，
+    // 两边各挑几个字段就会显示得不一样。
+    extractEventActionName(event.data) ?? undefined,
   );
 
   switch (event.type) {

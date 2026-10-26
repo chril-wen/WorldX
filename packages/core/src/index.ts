@@ -76,6 +76,12 @@ export { DialogueGenerator } from "./simulation/dialogue-generator.js";
 export { buildPerception } from "./simulation/perceiver.js";
 export { buildActionMenu } from "./simulation/action-menu-builder.js";
 export { executeAction, completeAction } from "./simulation/action-executor.js";
+export {
+  eventTypeLabel,
+  extractEventActionName,
+  extractEventSummary,
+  prettifyToken,
+} from "./simulation/event-format.js";
 
 export { calculateDramScore, flagHighDramaEvents } from "./content/drama-scorer.js";
 export { extractQuotes } from "./content/quote-extractor.js";
