@@ -67,11 +67,20 @@ describe("提示词模板读取不依赖 cwd", () => {
     throw lastError;
   }
 
+  // ⚠ 显式给 30 秒预算。
+  //
+  // 每个 cwd 要 spawn 一个 tsx 子进程（约 2.3 秒），两个 cwd ≈ 4.6 秒 ——
+  // vitest 的**默认** timeout 是 5 秒，只剩 300ms 余量。
+  // 全量跑的时候 CPU 一有竞争（别的测试文件在跑）就超时。
+  //
+  // 这不是放宽断言 —— 断言一点没动，模板读不到照样红。
+  // 只是给「本来就慢」的测试够用的时间。
+
   it("从 server/ 和仓库根读到的模板完全一致", () => {
     const fromServer = loadFrom(path.join(REPO_ROOT, "server"));
     const fromRoot = loadFrom(REPO_ROOT);
     expect(fromServer).toBe(fromRoot);
-  });
+  }, 30_000);
 
   it("两个 cwd 下都真的读到了模板（没报 ERROR）", () => {
     for (const cwd of [path.join(REPO_ROOT, "server"), REPO_ROOT]) {
@@ -82,5 +91,5 @@ describe("提示词模板读取不依赖 cwd", () => {
         expect(len).toBeGreaterThan(0);
       }
     }
-  });
+  }, 30_000);
 });

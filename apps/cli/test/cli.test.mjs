@@ -44,6 +44,32 @@ function run(args, env = {}) {
 }
 
 /**
+ * 跑 `scripts/` 下的独立脚本。
+ *
+ * `npm run timeline -- list` 这种用法有人在直接用 ——
+ * CLI 改了不能把它弄坏，所以要单独测一遍。
+ *
+ * @param {string[]} args 脚本参数
+ */
+function runScript(args) {
+  const script = join(REPO_ROOT, "scripts", "timeline.mjs");
+  try {
+    const stdout = execFileSync("node", ["--import", "tsx", script, ...args], {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { stdout, stderr: "", code: 0 };
+  } catch (err) {
+    return {
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+      code: err.status ?? 1,
+    };
+  }
+}
+
+/**
  * 指向一个**没人监听**的端口 —— 用来测「server 没跑」的情况。
  *
  * 端口 59999 是 IANA 保留的动态端口区间，实践中不会有人监听。
@@ -183,6 +209,34 @@ describe("需要 server 的命令", () => {
       expect(stderr).toContain("server");
       expect(stderr).toContain("npm run dev:server");
     }
+  }, 30_000);
+});
+
+describe("own-world timeline —— 输出跟 CLI 其它命令一个风格", () => {
+  it("list 用中文标题 + 分隔线，不打绝对路径", () => {
+    const { stdout, code } = run(["timeline", "list"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("时间线");
+    expect(stdout).toContain("─");
+    // 之前脚本开头是 `World: xxx  (E:\...\output\worlds\...)` ——
+    // 绝对路径对读的人没用。
+    expect(stdout).not.toContain("output\worlds");
+  });
+
+  it("--json 给出结构化数据", () => {
+    const { stdout, code } = run(["timeline", "list", "--json"]);
+    expect(code).toBe(0);
+    const json = JSON.parse(stdout.slice(stdout.indexOf("{")));
+    expect(Array.isArray(json.timelines)).toBe(true);
+  });
+
+  it("脚本独立跑也用同一套渲染（两边不会分叉）", () => {
+    // `npm run timeline -- list` 是根 package.json 里的 script，
+    // 有人在直接用它 —— 它不能因为 CLI 改了就坏掉。
+    const { stdout, code } = runScript(["list"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("时间线");
+    expect(stdout).toContain("─");
   });
 });
 
