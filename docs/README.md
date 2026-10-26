@@ -78,6 +78,7 @@
 
 | 文档 | 讲什么 |
 |---|---|
+| [EXPERIENCE.md](EXPERIENCE.md) | 阶段 6 的**逐点体验清单** —— 验收时照着走 |
 | [ATTRIBUTION.md](ATTRIBUTION.md) | 许可证、作者归属、第三方依赖 |
 | [REFACTOR-PLAN.md](REFACTOR-PLAN.md) | 重构的总体计划与历史 |
 | `E:\WordX\workspace\PROJECT.md` | 产品定位与审查基准（**仓库外**） |
