@@ -294,7 +294,8 @@ npm run create       # 通过命令行直接生成新世界
 
 ## 感谢
 -  [LinuxDO](https://linux.do/)
+- 每一位提交代码、提 issue、参与讨论的人 —— 完整的归属记录见 [docs/ATTRIBUTION.md](./docs/ATTRIBUTION.md)
 
 ## License
-MIT
+MIT —— 完整条款见 [LICENSE](./LICENSE)
 

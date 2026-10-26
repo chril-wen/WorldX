@@ -20,6 +20,32 @@ import { PROJECT_DIR } from "../lib/world-paths.mjs";
 const SCRIPT = path.join(PROJECT_DIR, "scripts", "timeline.mjs");
 
 /**
+ * 用 `node --import tsx` 跑，不是纯 `node`。
+ *
+ * ## 为什么
+ *
+ * `scripts/timeline.mjs` 会 `import("../server/src/store/snapshot-store.ts")`
+ * —— 直接 import TypeScript 源码。普通 `node` 加载 `.ts` 会报
+ * 「Unknown file extension ".ts"」。
+ *
+ * `npm run timeline` 用的是 `tsx scripts/timeline.mjs`，所以它能跑。
+ * CLI 转发时如果用纯 `node`，`snapshot` / `fork` / `restore` 这几个
+ * **要碰 server 的 TS 模块**的子命令就会挂。
+ *
+ * ## 为什么用 `--import` 而不是 `node_modules/.bin/tsx`
+ *
+ * `.bin/tsx` 是个 shell 脚本（`#!/bin/sh`）—— Windows 上
+ * `execFileSync` 不能直接执行它。
+ *
+ * `node --import tsx` 是 tsx 4.x 官方支持的加载器方式，
+ * 跨平台，而且**不依赖 shell**。
+ *
+ * `tsx` 在根 `package.json` 的 `dependencies` 里（不是 devDependencies）——
+ * 所以任何装了依赖的环境都能用。
+ */
+const TSX_LOADER = "tsx";
+
+/**
  * 转发给 `scripts/timeline.mjs`。
  *
  * @param {object} ctx
@@ -40,7 +66,7 @@ export async function cmdTimeline({ positionals, options }) {
   }
 
   try {
-    execFileSync("node", [SCRIPT, ...args], {
+    execFileSync("node", ["--import", TSX_LOADER, SCRIPT, ...args], {
       cwd: PROJECT_DIR,
       stdio: "inherit",
     });

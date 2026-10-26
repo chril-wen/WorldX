@@ -185,3 +185,27 @@ describe("需要 server 的命令", () => {
     }
   });
 });
+
+describe("worldx timeline", () => {
+  it("list 能跑（不需要 server）", () => {
+    const { code } = run(["timeline", "list"]);
+    expect(code).toBe(0);
+  });
+
+  it("snapshot 能加载 server 的 TS 模块", () => {
+    // 回归测试：CLI 转发时如果用纯 `node` 跑 `scripts/timeline.mjs`，
+    // 它 import server 的 `.ts` 就会报「Unknown file extension ".ts"」。
+    //
+    // 这个 bug 静默得很 —— `list` 能跑（不碰 TS 模块），
+    // 只有 `snapshot` / `fork` / `restore` 才暴露。
+    //
+    // 用一个**不存在的** timeline id：报错来自 server 代码
+    // （「Timeline not found」）而不是扩展名错误 —— 这恰好证明
+    // TS 模块**加载成功了**。而且不产生快照，不污染世界目录。
+    const { stdout, stderr, code } = run(["timeline", "snapshot", "没有这条时间线"]);
+    expect(code).toBe(1);
+    // 错误走 stderr
+    expect(stderr).toContain("Timeline not found");
+    expect(stderr).not.toContain("Unknown file extension");
+  });
+});
