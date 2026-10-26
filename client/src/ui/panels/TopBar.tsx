@@ -210,7 +210,7 @@ export function TopBar({
     setTimeout(() => setShowPauseToast(false), 3500);
   };
 
-  const worldName = worldInfo?.worldName || "WorldX";
+  const worldName = worldInfo?.worldName || "OWN-World";
   const period = gameTime.period ? translatePeriod(gameTime.period) : "";
   const weatherLabel = gameTime.weather ? translateWeather(gameTime.weather.kind) : "";
   const weatherSym = gameTime.weather ? weatherIcon(gameTime.weather.kind) : "";

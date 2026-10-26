@@ -3,7 +3,7 @@
 > 打印出来照着走。每一条后面有「**看点**」——那是要判断的东西，不是操作步骤。
 >
 > 环境：server 已在跑（3100），client 已在跑（3200）。
-> 所有 CLI 命令在 `E:\WordX\WorldX` 下用 `npm run cli --` 前缀。
+> 所有 CLI 命令在 `E:\WordX\OWN-World` 下用 `npm run cli --` 前缀。
 
 ---
 
@@ -193,4 +193,4 @@ EOF
 
 1. **记下所有让你卡住的地方** —— 不用客气，「这句看不懂」也是有效反馈
 2. 或者直接说「A3 的输出看不懂」，我们改
-3. 或者你验收完了，去 [REPORTS/phase-06.md](file:///E:/WordX/workspace/product/REPORTS/phase-06.md) §四 回答那三个待拍板的问题
+3. 或者你验收完了，去 [REPORTS/phase-06.md](file:///E:/WordX/OWN-World-design/product/REPORTS/phase-06.md) §四 回答那三个待拍板的问题

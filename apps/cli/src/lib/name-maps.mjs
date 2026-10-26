@@ -5,7 +5,7 @@
  * 但人要看到的是名字（`沈四娘`、`主区域`）。
  *
  * 名字从**世界配置**里读（不依赖 server）—— 这样
- * `worldx timeline` 之类不碰 server 的命令也能显示人话。
+ * `own-world timeline` 之类不碰 server 的命令也能显示人话。
  */
 
 import { readWorldConfig, resolveWorldDir } from "./world-paths.mjs";

@@ -1,12 +1,12 @@
 /**
- * `worldx create "<描述>"` —— 生成一个世界。
+ * `own-world create "<描述>"` —— 生成一个世界。
  *
  * ## 为什么要单独一条命令
  *
  * 世界生成要**几分钟**（画地图、视觉模型定位区域、生成角色立绘），
  * 期间 LLM 的输出是随机的 —— 同一个描述跑两次结果不一样。
  *
- * 所以 `worldx create` 做两件事：
+ * 所以 `own-world create` 做两件事：
  *
  * 1. 调 `orchestrator/src/index.mjs` 生成世界
  * 2. **把过程实时打出来** —— 不然用户面对几分钟的静默会以为卡死了
@@ -39,7 +39,7 @@ const ORCHESTRATOR = path.join(PROJECT_DIR, "orchestrator", "src", "index.mjs");
 export async function cmdCreate({ positionals }) {
   const prompt = positionals.join(" ").trim();
   if (!prompt) {
-    throw new Error('要一句描述，比如：worldx create "一个江南水乡的茶馆"');
+    throw new Error('要一句描述，比如：own-world create "一个江南水乡的茶馆"');
   }
 
   console.log(`生成世界：${prompt}`);
@@ -61,5 +61,5 @@ export async function cmdCreate({ positionals }) {
     throw new Error(`生成失败（退出码 ${code}）`);
   }
 
-  console.log("\n生成完成。看看有哪些世界：worldx worlds");
+  console.log("\n生成完成。看看有哪些世界：own-world worlds");
 }

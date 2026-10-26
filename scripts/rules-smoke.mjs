@@ -32,7 +32,7 @@ const PROJECT_DIR = path.resolve(__dirname, "..");
 const SERVER_DEPS = (spec) =>
   pathToFileURL(path.join(PROJECT_DIR, "server", "node_modules", spec)).href;
 
-// @worldx/core 是 npm workspace 的软链，在**仓库根**的 node_modules 里
+// @own-world/core 是 npm workspace 的软链，在**仓库根**的 node_modules 里
 // （server/node_modules 下没有 —— workspace 依赖都提升到根）。
 const CORE_ENTRY = path.join(
   PROJECT_DIR,

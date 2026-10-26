@@ -1,8 +1,8 @@
 # CLI 指南
 
-> **讲什么**：`worldx` 命令行工具怎么用。
+> **讲什么**：`own-world` 命令行工具怎么用。
 >
-> **一句话**：WorldX 的主界面是浏览器，但**有些事在终端里更顺手** ——
+> **一句话**：OWN-World 的主界面是浏览器，但**有些事在终端里更顺手** ——
 > 跑 tick 看事件流、改规则看效果、快照分叉对比。
 
 ---
@@ -16,11 +16,11 @@ npm run cli -- help
 或者全局装（`apps/cli/package.json` 里声明了 `bin`）：
 
 ```bash
-worldx help
+own-world help
 ```
 
-**本文用 `worldx` 指代**。用 `npm run cli --` 也一样：
-`npm run cli -- worlds` ≡ `worldx worlds`。
+**本文用 `own-world` 指代**（`worldx` 是保留的别名，两者等价）。用 `npm run cli --` 也一样：
+`npm run cli -- worlds` ≡ `own-world worlds`。
 
 ---
 
@@ -77,13 +77,13 @@ worldx help
 ### 4.1 生成世界，然后看它
 
 ```bash
-worldx create "一个江南水乡的茶馆"
-worldx worlds
-worldx world
-worldx locations
+own-world create "一个江南水乡的茶馆"
+own-world worlds
+own-world world
+own-world locations
 ```
 
-`worldx locations` 会顺手做一件有用的事：**对比 TMJ 和 world.json 的地点 id**。
+`own-world locations` 会顺手做一件有用的事：**对比 TMJ 和 world.json 的地点 id**。
 两边对不上就报出来 —— 这就是「看得见但用不了」的那个坑。
 
 ```
@@ -101,9 +101,9 @@ worldx locations
 # server 得在跑
 npm run dev:server
 
-worldx status
-worldx tick
-worldx characters
+own-world status
+own-world tick
+own-world characters
 ```
 
 `tick` 的输出：
@@ -125,24 +125,24 @@ worldx characters
 跑多个：
 
 ```bash
-worldx tick --count 10
+own-world tick --count 10
 ```
 
 ### 4.3 看事件流
 
 ```bash
-worldx events --limit 20
-worldx events --type dialogue
-worldx events --actor char_1792860223221
-worldx events --from-day 2 --to-day 3
+own-world events --limit 20
+own-world events --type dialogue
+own-world events --actor char_1792860223221
+own-world events --from-day 2 --to-day 3
 ```
 
 ### 4.4 改规则，验效果
 
 ```bash
-worldx rules list                        # 看有哪些规则
-worldx rules show                        # 看当前值
-worldx rules set emotion.decayRate 0.9   # 改
+own-world rules list                        # 看有哪些规则
+own-world rules show                        # 看当前值
+own-world rules set emotion.decayRate 0.9   # 改
 curl -X POST http://localhost:3100/api/world/reload
 ```
 
@@ -154,11 +154,11 @@ curl -X POST http://localhost:3100/api/world/reload
 这是 L3（世界可控）的核心能力。
 
 ```bash
-worldx timeline list                              # 列出时间线
-worldx timeline snapshots <timelineId>            # 列出快照
-worldx timeline snapshot <timelineId> --desc "分岔点"
-worldx timeline fork <timelineId> <snapshotId> --label "另一种可能"
-worldx timeline diff <timelineA> <timelineB>     # 对比
+own-world timeline list                              # 列出时间线
+own-world timeline snapshots <timelineId>            # 列出快照
+own-world timeline snapshot <timelineId> --desc "分岔点"
+own-world timeline fork <timelineId> <snapshotId> --label "另一种可能"
+own-world timeline diff <timelineA> <timelineB>     # 对比
 ```
 
 `timeline` 是**转发**给 `scripts/timeline.mjs` 的 —— 快照和分叉是纯文件操作，
@@ -171,9 +171,9 @@ worldx timeline diff <timelineA> <timelineB>     # 对比
 加 `--json` 就输出纯 JSON：
 
 ```bash
-worldx tick --json | jq '.events[] | select(.type == "dialogue")'
-worldx worlds --json | jq '.worlds[] | .id'
-worldx characters --json
+own-world tick --json | jq '.events[] | select(.type == "dialogue")'
+own-world worlds --json | jq '.worlds[] | .id'
+own-world characters --json
 ```
 
 **两种格式从同一份数据生成** —— 不会出现「表格里有的字段 JSON 里没有」。
@@ -185,7 +185,7 @@ worldx characters --json
 默认连 `http://localhost:3100`。换地址用环境变量：
 
 ```bash
-WORLDX_SERVER=http://192.168.1.10:3100 worldx status
+WORLDX_SERVER=http://192.168.1.10:3100 own-world status
 ```
 
 ---
@@ -221,7 +221,7 @@ apps/cli/
 ```
 
 **命令是动态加载的** —— 只有真正用到某个命令才会 import 它，
-所以 `worldx help` 不会加载所有命令的依赖。
+所以 `own-world help` 不会加载所有命令的依赖。
 
 ---
 

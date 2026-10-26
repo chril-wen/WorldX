@@ -77,7 +77,7 @@ async function loadNewMapManager() {
     tsImport(pathToFileURL(corePath).href, import.meta.url),
     tsImport(pathToFileURL(clientCorePath).href, import.meta.url),
   ]);
-  // map-model 依赖 @worldx/core —— 用 core 的源码满足它
+  // map-model 依赖 @own-world/core —— 用 core 的源码满足它
   return { MapManager: clientCore.MapManager, core };
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { LLMClient } from "./llm-client.js";
-import type { CostTracker, LLMCallLog } from "@worldx/core";
+import type { CostTracker, LLMCallLog } from "@own-world/core";
 
 /**
  * 守住一个曾经让**所有 LLM 记账失效**的 bug。

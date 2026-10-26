@@ -1,5 +1,5 @@
 /**
- * `worldx tick` —— 推进一个 tick。
+ * `own-world tick` —— 推进一个 tick。
  *
  * ## 为什么要先查 worldId / timelineId
  *
@@ -13,7 +13,7 @@
  * ## 不传 --world 的行为
  *
  * 用 server 当前的上下文。CLI **不切世界** —— 切世界是
- * `worldx use <worldId>` 的事，隐式切世界会让「我现在在哪个世界」
+ * `own-world use <worldId>` 的事，隐式切世界会让「我现在在哪个世界」
  * 这件事变得不可预测。
  */
 

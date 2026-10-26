@@ -1,10 +1,10 @@
-import { DEFAULT_CENTER_LOCATION_ID } from "@worldx/core/contracts/world.js";
+import { DEFAULT_CENTER_LOCATION_ID } from "@own-world/core/contracts/world.js";
 import {
   DEFAULT_TILE_SIZE,
   parseTmj,
   toInteractiveObjects,
   toLocationRects,
-} from "@worldx/core/engine/tmj-parser.js";
+} from "@own-world/core/engine/tmj-parser.js";
 import type { MainAreaPointInfo } from "./types.js";
 import type { InteractiveObject, LocationRect, MainAreaPointNode } from "./types.js";
 

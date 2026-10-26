@@ -6,7 +6,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@server-types": ["../server/src/types"],
-      "@worldx/client-core": ["../packages/client-core/src/index.ts"]
+      "@own-world/client-core": ["../packages/client-core/src/index.ts"]
     }
   },
   "include": ["src/**/*", "src/**/*.tsx"]

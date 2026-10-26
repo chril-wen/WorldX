@@ -10,8 +10,8 @@
  * 而这里的命令长这样：
  *
  * ```
- * worldx tick --world output/worlds/xxx
- * worldx snapshot <timelineId> --desc "备注"
+ * own-world tick --world output/worlds/xxx
+ * own-world snapshot <timelineId> --desc "备注"
  * ```
  *
  * `--world` 后面跟的是**任意路径**（可能含 `/`、`.`），

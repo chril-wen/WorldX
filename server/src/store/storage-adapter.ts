@@ -15,7 +15,7 @@ import type {
   SnapshotStorage,
   Storage,
   WorldStateStorage,
-} from "@worldx/core";
+} from "@own-world/core";
 import * as charStateStore from "../store/character-state-store.js";
 import * as memoryStore from "../store/memory-store.js";
 import * as diaryStore from "../store/diary-store.js";

@@ -1,5 +1,5 @@
 /**
- * `worldx world` —— 看一个世界的详情。
+ * `own-world world` —— 看一个世界的详情。
  *
  * 不需要 server —— world.json 就在磁盘上。
  */

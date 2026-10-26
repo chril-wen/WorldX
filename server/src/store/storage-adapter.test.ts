@@ -9,8 +9,8 @@ import {
   sqliteDiaryStorage,
   createDefaultStorage,
 } from "../store/storage-adapter.js";
-import { MemoryManager } from "@worldx/core";
-import type { MemoryEntry, CharacterState } from "@worldx/core";
+import { MemoryManager } from "@own-world/core";
+import type { MemoryEntry, CharacterState } from "@own-world/core";
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "worldx-adapter-test-"));
 

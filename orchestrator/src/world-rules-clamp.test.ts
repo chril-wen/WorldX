@@ -3,7 +3,7 @@ import { generateConfigs } from "./config-generator.mjs";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mergeRules } from "@worldx/core";
+import { mergeRules } from "@own-world/core";
 
 /**
  * 规则值在**写盘时**被规范化 —— 审阅阶段 2.5 时补的。

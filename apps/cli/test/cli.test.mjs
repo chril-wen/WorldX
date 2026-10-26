@@ -64,7 +64,7 @@ const NO_SERVER = { WORLDX_SERVER: "http://localhost:59999" };
  */
 const KNOWN_WORLD = "world_2026-10-20T11-06-51";
 
-describe("worldx help", () => {
+describe("own-world help", () => {
   it("列出所有命令", () => {
     const { stdout, code } = run(["help"]);
     expect(code).toBe(0);
@@ -89,7 +89,7 @@ describe("worldx help", () => {
   it("不带参数也打帮助", () => {
     const { stdout, code } = run([]);
     expect(code).toBe(0);
-    expect(stdout).toContain("worldx");
+    expect(stdout).toContain("own-world");
   });
 
   it("未知命令退出码是 1", () => {
@@ -99,7 +99,7 @@ describe("worldx help", () => {
   });
 });
 
-describe("worldx worlds", () => {
+describe("own-world worlds", () => {
   it("列出世界", () => {
     const { stdout, code } = run(["worlds"]);
     expect(code).toBe(0);
@@ -132,7 +132,7 @@ describe("worldx worlds", () => {
   });
 });
 
-describe("worldx world", () => {
+describe("own-world world", () => {
   it("显示世界详情", () => {
     // 显式指定世界 —— 不依赖「当前世界」。
     //
@@ -151,7 +151,7 @@ describe("worldx world", () => {
   });
 });
 
-describe("worldx locations", () => {
+describe("own-world locations", () => {
   it("列出地点并做一致性检查", () => {
     const { stdout, code } = run(["locations", "--world", KNOWN_WORLD]);
     expect(code).toBe(0);
@@ -186,7 +186,7 @@ describe("需要 server 的命令", () => {
   });
 });
 
-describe("worldx timeline", () => {
+describe("own-world timeline", () => {
   it("list 能跑（不需要 server）", () => {
     const { code } = run(["timeline", "list"]);
     expect(code).toBe(0);

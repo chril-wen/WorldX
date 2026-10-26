@@ -6,7 +6,7 @@
  * 环境变量 `SIMULATION_INPUT_PRICE_PER_1K` / `SIMULATION_OUTPUT_PRICE_PER_1K` 可覆盖。
  */
 
-import type { CostTracker, LLMCallLog } from "@worldx/core";
+import type { CostTracker, LLMCallLog } from "@own-world/core";
 import { getDb } from "../store/db.js";
 import { generateId } from "../utils/id-generator.js";
 import { loadModelsConfig } from "../../../shared/models-config.mjs";

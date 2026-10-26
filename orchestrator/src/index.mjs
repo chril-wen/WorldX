@@ -45,7 +45,7 @@ async function main() {
   mkdirSync(logsDir, { recursive: true });
 
   console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║         WorldX: One Sentence, One World       ║");
+  console.log("║      OWN-World: One Sentence, One World       ║");
   console.log("╚══════════════════════════════════════════════╝\n");
   console.log(`World ID: ${worldId}`);
   console.log(`Prompt:   ${userPrompt}\n`);

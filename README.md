@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/logo.png" alt="WorldX logo:d" width="200" />
+  <img src="docs/logo.png" alt="OWN-World logo" width="200" />
 </p>
 <p align="center">
-  <!-- <h1 align="center">WorldX</h1> -->
+  <!-- <h1 align="center">OWN-World</h1> -->
   <p align="center"><strong>一句话，生成一个鲜活的 AI 世界。</strong></p>
 </p>
 
@@ -26,21 +26,21 @@
 
 ---
 
-说出你的要求，**WorldX** 会为你构筑一个完整的虚拟世界。
+说出你的要求，**OWN-World** 会为你构筑一个完整的虚拟世界。
 AI 角色们会在这个世界里自主生活：他们做决策、与场景交互、建立关系、开展对话、记忆并思考，涌现出没人提前写好剧本的故事。
 你也可以作为"上帝"随时介入 —— 注入事件、编辑角色记忆或人格，看整个世界因此走向何方。你也能与任意角色展开一场架空对话。
 
 > "北宋汴京的夜市街，有算命的、当铺掌柜、小偷、捕快，还有一个穿越来的现代人"
 
-只需要这一句话，剩下的交给 WorldX。
+只需要这一句话，剩下的交给 OWN-World。
 <table>
 <tr>
-<td align="center" valign="top" width="50%"><img src="docs/screenshot1.png" alt="WorldX: one-sentence world creation interface" width="400"/></td>
-<td align="center" valign="top" width="50%"><img src="docs/screenshot2.png" alt="WorldX: pixel world simulation with character dialogue sidebar" width="400"/></td>
+<td align="center" valign="top" width="50%"><img src="docs/screenshot1.png" alt="OWN-World: one-sentence world creation interface" width="400"/></td>
+<td align="center" valign="top" width="50%"><img src="docs/screenshot2.png" alt="OWN-World: pixel world simulation with character dialogue sidebar" width="400"/></td>
 </tr>
 <tr>
-<td align="center" valign="top" width="50%"><img src="docs/screenshot3.png" alt="WorldX: pixel world simulation with character dialogue sidebar" width="400"/></td>
-<td align="center" valign="top" width="50%"><img src="docs/screenshot2_en.png" alt="WorldX: one-sentence world creation interface" width="400"/></td>
+<td align="center" valign="top" width="50%"><img src="docs/screenshot3.png" alt="OWN-World: pixel world simulation with character dialogue sidebar" width="400"/></td>
+<td align="center" valign="top" width="50%"><img src="docs/screenshot2_en.png" alt="OWN-World: one-sentence world creation interface" width="400"/></td>
 </tr>
 </table>
 
@@ -79,6 +79,7 @@ AI 角色们会在这个世界里自主生活：他们做决策、与场景交�
 想先看看效果？项目内置了两个预生成的世界，配置 **世界驱动** 模型的大模型即可运行。
 
 ```bash
+# 仓库地址还是上游的（项目原名 WorldX），本地目录可以随意命名
 git clone https://github.com/YGYOOO/WorldX.git
 cd WorldX
 cp .env.example .env
@@ -108,7 +109,7 @@ npm run create -- "赛博朋克风格的深夜拉面馆，黑客和仿生人在�
 
 ## 模型配置
 
-WorldX 使用 **4 个模型角色**，各自独立配置。除绘图模型支持 Google AI Studio 原生图片接口外，其余角色均采用 OpenAI 兼容的 `chat/completions` 协议。
+OWN-World 使用 **4 个模型角色**，各自独立配置。除绘图模型支持 Google AI Studio 原生图片接口外，其余角色均采用 OpenAI 兼容的 `chat/completions` 协议。
 
 
 | 角色       | 环境变量前缀          | 用途             | 推荐模型                                      |
@@ -250,21 +251,31 @@ https://zhuanlan.zhihu.com/p/2032410449854068566
 
 ## 项目结构
 ```
-WorldX/
+OWN-World/
+├── packages/
+│   ├── core/             # 框架无关的模拟引擎（唯一依赖 zod + nanoid）
+│   │   ├── contracts/    # 类型与 schema
+│   │   ├── engine/       # WorldManager, SimulationEngine, 规则引擎, TMJ 解析
+│   │   ├── simulation/   # 决策、对话、反思、事件格式
+│   │   └── llm/          # LLM 端口与调用记录
+│   └── client-core/      # 框架无关的地图数据层（依赖 core）
+│       └── src/          # TMJ 解析、地图模型、寻路
+├── apps/
+│   └── cli/              # 命令行入口（生成/状态/tick/快照/分叉/对比）
 ├── orchestrator/         # LLM 驱动的世界设计与配置生成
 │   ├── src/
 │   │   ├── index.mjs           # 管线入口：一句话 → 世界
 │   │   ├── world-designer.mjs  # LLM 世界设计
-│   │   └── config-generator.mjs
+│   │   └── plugins/            # 插件契约与注册表
 │   └── prompts/
 │       └── design-world.md     # 世界设计 prompt 模板
 ├── generators/           # 美术生成管线
 │   ├── map/              # 地图生成（多步骤 + 审查循环）
 │   └── character/        # 角色立绘生成（含抠图）
-├── server/               # 模拟引擎（Express + SQLite + LLM）
+├── server/               # 模拟引擎的服务端外壳（Express + SQLite + LLM）
 │   └── src/
-│       ├── core/         # WorldManager, CharacterManager
-│       ├── simulation/   # SimulationEngine, DecisionMaker, DialogueGenerator
+│       ├── core/         # 对 core 的 re-export（既有 import 路径不破）
+│       ├── simulation/   # SimulationEngine 门面
 │       ├── llm/          # LLMClient, PromptBuilder
 │       └── store/        # SQLite 持久化（每时间线独立）
 ├── client/               # 游戏客户端（Phaser 3 + React 19）
@@ -272,11 +283,16 @@ WorldX/
 │       ├── scenes/       # BootScene, WorldScene
 │       ├── ui/           # React 覆盖层面板
 │       └── systems/      # 相机、寻路、回放
+├── docs/                 # 开发文档（架构、插件、配置、规则、CLI）
 ├── shared/               # 共享工具（结构化输出解析）
 ├── library/worlds/       # 内置示例世界
 ├── output/worlds/        # 你生成的世界
 └── .env.example          # 配置模板
 ```
+
+> 依赖方向：`core ← client-core ← client`。
+> `packages/core` 是框架无关的（不碰 Phaser / React / DOM）——
+> 所以 server 和 client 能共用同一套模拟逻辑。
 
 ## 开发
 

@@ -1,5 +1,5 @@
 /**
- * 天气实现已迁到 @worldx/core —— 这里保留 server 侧的门面。
+ * 天气实现已迁到 @own-world/core —— 这里保留 server 侧的门面。
  *
  * 原来的 API 是模块级函数（`getWeatherState()` 等），到处都在用；
  * core 里的 `WeatherManager` 是类，存储从构造函数注入。
@@ -17,8 +17,8 @@ import {
   buildWeatherChangeEvent,
   SEVERE_WEATHER,
   WEATHER_KINDS,
-} from "@worldx/core";
-import type { WeatherKind, WeatherState, Exposure } from "@worldx/core";
+} from "@own-world/core";
+import type { WeatherKind, WeatherState, Exposure } from "@own-world/core";
 import { sqliteWorldStateStorage } from "../store/storage-adapter.js";
 
 export {

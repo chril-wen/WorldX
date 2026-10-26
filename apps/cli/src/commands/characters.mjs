@@ -1,5 +1,5 @@
 /**
- * `worldx characters` —— 列出角色和他们在干什么。
+ * `own-world characters` —— 列出角色和他们在干什么。
  *
  * 需要 server —— 角色的**当前状态**存在 server 的 SQLite 里。
  */

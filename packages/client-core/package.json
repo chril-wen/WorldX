@@ -1,5 +1,5 @@
 {
-  "name": "@worldx/client-core",
+  "name": "@own-world/client-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@worldx/core": "^0.1.0",
+    "@own-world/core": "^0.1.0",
     "easystarjs": "^0.4.4"
   },
   "devDependencies": {

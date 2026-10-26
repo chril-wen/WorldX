@@ -1,6 +1,6 @@
 import i18n from "../../i18n";
 import type { CharacterInfo, LocationInfo, SimulationEvent } from "../../types/api";
-import { extractEventActionName } from "@worldx/core/simulation/event-format.js";
+import { extractEventActionName } from "@own-world/core/simulation/event-format.js";
 
 const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 

@@ -1,5 +1,5 @@
 /**
- * `worldx worlds` —— 列出所有世界。
+ * `own-world worlds` —— 列出所有世界。
  *
  * ## 为什么直接读文件，不走 server
  *

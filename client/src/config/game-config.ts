@@ -1,7 +1,7 @@
 /**
  * 每格边长（像素）。
  *
- * 地图数据层在 `@worldx/client-core`，那边用的是 `DEFAULT_TILE_SIZE`
+ * 地图数据层在 `@own-world/client-core`，那边用的是 `DEFAULT_TILE_SIZE`
  * （同一个值 32）。这里保留是为了 client 自己的代码读起来顺。
  */
 export const TILE_SIZE = 32;
@@ -18,7 +18,7 @@ export const TILE_SIZE = 32;
  * 真正的值从 `/world/info` 的 `centerLocationId` 来 ——
  * 旧世界都叫 "main_area"，所以默认值让行为跟之前完全一致。
  */
-export { DEFAULT_CENTER_LOCATION_ID } from "@worldx/client-core";
+export { DEFAULT_CENTER_LOCATION_ID } from "@own-world/client-core";
 
 export const SPRITE_FRAME_WIDTH = 170;
 export const SPRITE_FRAME_HEIGHT = 204;

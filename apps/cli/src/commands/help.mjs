@@ -1,5 +1,5 @@
 /**
- * `worldx help` —— 命令表。
+ * `own-world help` —— 命令表。
  *
  * ## 为什么分两个文件
  *
@@ -16,8 +16,8 @@
  * @param {Record<string, {summary: string, needsServer: boolean}>} commands
  */
 export function printHelp(commands) {
-  console.log("worldx —— WorldX 命令行工具\n");
-  console.log("用法：worldx <命令> [选项]\n");
+  console.log("own-world —— OWN-World 命令行工具\n");
+  console.log("用法：own-world <命令> [选项]\n");
   console.log("命令：");
 
   const width = Math.max(...Object.keys(commands).map((k) => k.length));
@@ -32,19 +32,19 @@ export function printHelp(commands) {
   console.log("  --help             显示这份帮助");
 
   console.log("\n例子：");
-  console.log('  worldx create "一个江南水乡的茶馆"');
-  console.log("  worldx worlds");
-  console.log("  worldx tick --count 10");
-  console.log("  worldx characters");
-  console.log("  worldx rules show");
-  console.log("  worldx rules set emotion.decayRate 0.9");
-  console.log("  worldx timeline snapshot <timelineId> --desc \"分岔点\"");
-  console.log("  worldx timeline fork <timelineId> <snapshotId> --label \"另一种可能\"");
-  console.log("  worldx timeline diff <timelineA> <timelineB>");
+  console.log('  own-world create "一个江南水乡的茶馆"');
+  console.log("  own-world worlds");
+  console.log("  own-world tick --count 10");
+  console.log("  own-world characters");
+  console.log("  own-world rules show");
+  console.log("  own-world rules set emotion.decayRate 0.9");
+  console.log("  own-world timeline snapshot <timelineId> --desc \"分岔点\"");
+  console.log("  own-world timeline fork <timelineId> <snapshotId> --label \"另一种可能\"");
+  console.log("  own-world timeline diff <timelineA> <timelineB>");
 }
 
 /**
- * `worldx help` 命令的入口。
+ * `own-world help` 命令的入口。
  */
 export async function cmdHelp() {
   const { COMMANDS } = await import("./index.mjs");

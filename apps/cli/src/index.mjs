@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * `worldx` —— WorldX 命令行工具。
+ * `own-world` —— OWN-World 命令行工具。
  *
  * ## 为什么要有 CLI
  *
- * WorldX 的主界面是浏览器里的 Phaser + React。但**有些事在终端里更顺手**：
+ * OWN-World 的主界面是浏览器里的 Phaser + React。但**有些事在终端里更顺手**：
  *
  * - 跑 tick 看事件流 —— 不用开浏览器
  * - 改规则看效果 —— 改完立刻 reload 对拍
  * - 快照/分叉/对比 —— 这是 L3 的核心能力，本来就只能命令行做
- * - 脚本化 —— `worldx tick --count 10` 塞进别的流程里
+ * - 脚本化 —— `own-world tick --count 10` 塞进别的流程里
  *
  * ## 哪些命令要 server，哪些不要
  *

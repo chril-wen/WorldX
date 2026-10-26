@@ -1,5 +1,5 @@
 /**
- * `worldx status` —— 模拟当前状态。
+ * `own-world status` —— 模拟当前状态。
  *
  * 需要 server —— 模拟状态（暂停/恢复/当前时间线）在它内存里。
  */

@@ -1,5 +1,5 @@
 /**
- * `@worldx/client-core` —— 框架无关的地图数据层。
+ * `@own-world/client-core` —— 框架无关的地图数据层。
  *
  * ## 这里放什么
  *
@@ -11,7 +11,7 @@
  *
  * ## 依赖
  *
- * - `@worldx/core` —— 只取 `contracts` 层的类型和 `DEFAULT_CENTER_LOCATION_ID`。
+ * - `@own-world/core` —— 只取 `contracts` 层的类型和 `DEFAULT_CENTER_LOCATION_ID`。
  *   core 本身零 Phaser（阶段 1 验收过），所以这不违反「框架无关」。
  * - `easystarjs` —— A* 实现。**寻路本身必须在包里**，
  *   否则每个新 UI 都要自己实现一遍。
@@ -37,7 +37,7 @@ export {
 } from "./pathfinding.js";
 
 /**
- * TMJ 解析在 `@worldx/core` —— core 本身就在读 TMJ
+ * TMJ 解析在 `@own-world/core` —— core 本身就在读 TMJ
  * （`world-manager.ts` 重建点位邻接、推断地图尺寸），
  * 解析器放 client-core 会让依赖成环。
  *
@@ -46,7 +46,7 @@ export {
  *
  * ## 为什么用子路径，不从包根导入
  *
- * 从 `@worldx/core` 根导入会把**整个 core** 拉进 client 的模块图 ——
+ * 从 `@own-world/core` 根导入会把**整个 core** 拉进 client 的模块图 ——
  * 包括 `engine/world-manager.js`，它 `import fs from "node:fs"`，
  * 顶层还读 `process.env`。
  *
@@ -64,12 +64,12 @@ export {
   toLocationRects,
   gridToPixel,
   pixelToGrid,
-} from "@worldx/core/engine/tmj-parser.js";
+} from "@own-world/core/engine/tmj-parser.js";
 export type {
   ParsedTmj,
   TmjBackground,
   TmjObject,
-} from "@worldx/core/engine/tmj-parser.js";
+} from "@own-world/core/engine/tmj-parser.js";
 
 export type {
   GridPoint,
@@ -85,4 +85,4 @@ export type {
  * 直接 re-export core 的那一份 —— 改造前 client 和 core 各定义一次，
  * 值相同，注释里还互相声明「是同一个值」。
  */
-export { DEFAULT_CENTER_LOCATION_ID } from "@worldx/core/contracts/world.js";
+export { DEFAULT_CENTER_LOCATION_ID } from "@own-world/core/contracts/world.js";

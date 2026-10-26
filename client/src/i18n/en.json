@@ -11,10 +11,10 @@
     "closeWorldIntro": "Close world intro"
   },
   "create": {
-    "brand": "WorldX",
+    "brand": "OWN-World",
     "backToWorld": "← Back to current world",
     "tagline": "One sentence. One living world.",
-    "subtitle": "Describe the world you want to create. WorldX will design the landscape, craft the mechanics, create characters that think for themselves, and bring everything to life.",
+    "subtitle": "Describe the world you want to create. OWN-World will design the landscape, craft the mechanics, create characters that think for themselves, and bring everything to life.",
     "promptLabel": "What kind of world?",
     "promptPlaceholder": "A cozy mountain village in autumn, with a blacksmith, a tea house owner, a wandering monk and a curious child...",
     "tryLabel": "Try:",

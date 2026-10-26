@@ -1,5 +1,5 @@
 /**
- * `worldx timeline` —— 快照 / 分叉 / 对比。
+ * `own-world timeline` —— 快照 / 分叉 / 对比。
  *
  * ## 为什么不重写一份
  *
@@ -9,7 +9,7 @@
  * 重写一份只会得到两套行为不一致的实现。所以这里
  * **转发**给那个脚本，参数原样传过去。
  *
- * 唯一多做的事：把 `worldx timeline` 变成 `worldx timeline <子命令>`，
+ * 唯一多做的事：把 `own-world timeline` 变成 `own-world timeline <子命令>`，
  * 也就是把脚本的「第一个参数」提升成 CLI 的「子命令」层级。
  */
 

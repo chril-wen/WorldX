@@ -5,7 +5,7 @@
  * 读完了注入给 core 的 `LLMClient`。
  */
 
-import type { LLMConfig } from "@worldx/core";
+import type { LLMConfig } from "@own-world/core";
 import { loadModelsConfig } from "../../../shared/models-config.mjs";
 
 /**

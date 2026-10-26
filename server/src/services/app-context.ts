@@ -7,7 +7,7 @@ import {
   SimulationEngine,
   DecisionMaker,
   DialogueGenerator,
-} from "@worldx/core";
+} from "@own-world/core";
 import { initDatabase, closeDb } from "../store/db.js";
 import { createDefaultStorage } from "../store/storage-adapter.js";
 import { filesystemConfigSource } from "../store/config-source.js";

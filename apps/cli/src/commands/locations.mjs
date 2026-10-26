@@ -1,5 +1,5 @@
 /**
- * `worldx locations` —— 列出世界的地点。
+ * `own-world locations` —— 列出世界的地点。
  *
  * 不需要 server。
  *

@@ -1,5 +1,5 @@
 import { getDb } from "./db.js";
-import type { DiaryEntry } from "@worldx/core";
+import type { DiaryEntry } from "@own-world/core";
 
 function rowToDiary(row: any): DiaryEntry {
   return {

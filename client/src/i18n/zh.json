@@ -11,10 +11,10 @@
     "closeWorldIntro": "关闭世界介绍"
   },
   "create": {
-    "brand": "WorldX",
+    "brand": "OWN-World",
     "backToWorld": "← 返回当前世界",
     "tagline": "一句话，生成一个鲜活的 AI 世界。",
-    "subtitle": "描述你想创造的世界。WorldX 会设计世界风貌、运作机制，会创造能自主思考的角色，让一切鲜活起来。",
+    "subtitle": "描述你想创造的世界。OWN-World 会设计世界风貌、运作机制，会创造能自主思考的角色，让一切鲜活起来。",
     "promptLabel": "你想要什么样的世界？",
     "promptPlaceholder": "一个秋天的温馨山村，有铁匠、茶馆老板、云游僧人和一个好奇的孩子……",
     "tryLabel": "试试：",

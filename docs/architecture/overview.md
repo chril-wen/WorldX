@@ -10,7 +10,7 @@
 
 ## 1. 一句话
 
-WorldX 是一个 **LLM 驱动的角色社会模拟器**：
+OWN-World 是一个 **LLM 驱动的角色社会模拟器**：
 一句话描述 → 生成一张地图和一群有身份的角色 → 角色在自己的内部状态
 （情绪 / 需求 / 记忆）驱动下持续行动、互相交谈、产生故事。
 
@@ -72,8 +72,8 @@ grep -rhn "^import .*from" packages/core/src/ | grep -E '"express"|"phaser"|"rea
 **例外**：`client-core → core` 是允许的，而且**必须**是子路径导入：
 
 ```ts
-import { parseTmj } from "@worldx/core/engine/tmj-parser.js";   // ✅
-import { parseTmj } from "@worldx/core";                        // ❌
+import { parseTmj } from "@own-world/core/engine/tmj-parser.js";   // ✅
+import { parseTmj } from "@own-world/core";                        // ❌
 ```
 
 从包根导入会把整个 core（包括 `engine/world-manager.js` 里的

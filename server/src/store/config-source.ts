@@ -5,7 +5,7 @@
  * 换配置来源（比如接数据库、接远程配置）时只改这一处。
  */
 
-import type { WorldConfigSource } from "@worldx/core";
+import type { WorldConfigSource } from "@own-world/core";
 import {
   setWorldDir,
   getWorldDir,

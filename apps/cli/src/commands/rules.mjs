@@ -1,5 +1,5 @@
 /**
- * `worldx rules` —— 改世界规则。
+ * `own-world rules` —— 改世界规则。
  *
  * ## 为什么不重写一份
  *

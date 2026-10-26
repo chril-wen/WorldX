@@ -1,5 +1,5 @@
 /**
- * `@worldx/core` —— 模拟引擎的框架无关核心。
+ * `@own-world/core` —— 模拟引擎的框架无关核心。
  *
  * 这里的代码不依赖 Express / SQLite / Phaser，只依赖标准库与 zod/nanoid。
  * server 通过 npm workspace 消费本包，server 侧保留 re-export 保持既有 import 路径可用。

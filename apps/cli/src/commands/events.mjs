@@ -1,14 +1,14 @@
 /**
- * `worldx events` —— 看事件流。
+ * `own-world events` —— 看事件流。
  *
  * 需要 server —— 事件存在 server 的 SQLite 里。
  *
  * 支持过滤：
  * ```
- * worldx events --limit 20
- * worldx events --type dialogue
- * worldx events --actor char_xxx
- * worldx events --from-day 2 --to-day 3
+ * own-world events --limit 20
+ * own-world events --type dialogue
+ * own-world events --actor char_xxx
+ * own-world events --from-day 2 --to-day 3
  * ```
  */
 

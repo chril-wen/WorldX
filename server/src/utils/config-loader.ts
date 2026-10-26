@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { WorldConfig, CharacterProfile, SceneConfig } from "../types/index.js";
-import { migrateWorldConfig, DEFAULT_CENTER_LOCATION_ID } from "@worldx/core";
+import { migrateWorldConfig, DEFAULT_CENTER_LOCATION_ID } from "@own-world/core";
 import type { IconicCues, CanonicalRefs, CharacterAnchor } from "../types/character.js";
 import { LEGACY_CONFIGS_DIR, PROMPTS_DIR } from "./repo-paths.js";
 

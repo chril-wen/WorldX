@@ -1,10 +1,11 @@
 {
-  "name": "@worldx/cli",
+  "name": "@own-world/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "WorldX 命令行工具 —— 生成世界、看状态、跑 tick、快照/分叉/对比",
+  "description": "OWN-World 命令行工具 —— 生成世界、看状态、跑 tick、快照/分叉/对比",
   "bin": {
+    "own-world": "./src/index.mjs",
     "worldx": "./src/index.mjs"
   },
   "scripts": {
