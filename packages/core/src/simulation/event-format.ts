@@ -83,6 +83,70 @@ export function prettifyToken(token: string): string {
 }
 
 /**
+ * 引擎内部的 action id → 人话。
+ *
+ * ## 为什么需要这张表
+ *
+ * 有些 action 是**引擎内部的状态标记**，没有对应的「世界动作」：
+ *
+ * - `post_dialogue` —— 对话结束后的空闲期（`finishDialogueSession` 写的）
+ * - `traveling` —— 移动中
+ * - `idle` —— 无事可做
+ *
+ * 这些事件走到 `action-executor.ts` 的**兜底分支**，
+ * `data` 里只有 `action: "post_dialogue"`，**没有 `actionName`**。
+ * 渲染时只能显示裸 id —— 「赵龙 结束post_dialogue」。
+ *
+ * client 有同样的问题（`actionName` 也是裸 id）。
+ *
+ * ## 为什么放在 core
+ *
+ * 这是**取值**，不是展示 —— client 和 CLI 都需要它，
+ * 放一处才不会各写一份、各漏几个。
+ */
+const INTERNAL_ACTION_LABELS: Record<string, string> = {
+  post_dialogue: "闲聊余温",
+  traveling: "赶路",
+  idle: "闲待",
+  in_conversation: "对话中",
+  explore: "四下看看",
+  rest: "歇着",
+};
+
+/**
+ * 把 action 翻成人话。
+ *
+ * ## 两个参数的区别
+ *
+ * - `actionId` —— **内部 id**（`data.action`）：`post_dialogue`、`traveling`、`idle`
+ * - `displayName` —— **已有的显示名**（`data.actionName`）：「找人攀谈」「闲逛观察」
+ *
+ * ## 为什么不能直接用 `extractEventActionName` 的结果
+ *
+ * 那个函数的字段优先级是 `actionName` → `interactionName` → `action` → …，
+ * 意思是「取到哪个算哪个」。但 `data.action` 有时是**内部 id**
+ * （`post_dialogue`），不是显示名 —— 直接拿来做显示就露馅了
+ * （「赵龙 结束post_dialogue」）。
+ *
+ * 所以这里**分开取**：显示名优先用 `data.actionName`，
+ * 没有才拿 `data.action` 去查内部 action 表。
+ *
+ * @param {string|null|undefined} actionId 内部 action id（`data.action`）
+ * @param {string|null|undefined} displayName 已有的显示名（`data.actionName`）
+ * @returns {string} 人话；实在没有就返回空串
+ */
+export function actionLabel(
+  actionId: string | null | undefined,
+  displayName?: string | null,
+): string {
+  if (displayName && displayName.length > 0) return displayName;
+  if (!actionId) return "";
+  const label = INTERNAL_ACTION_LABELS[actionId];
+  if (label) return label;
+  return prettifyToken(actionId);
+}
+
+/**
  * 事件类型的中文名。
  *
  * 跟 client 的 i18n key 一一对应 —— 但这里是**硬编码的中文**，

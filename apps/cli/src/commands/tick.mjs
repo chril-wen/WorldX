@@ -74,9 +74,16 @@ export async function cmdTick({ options, flags }) {
   };
 
   // 事件里的人话摘要 —— 名字从世界配置读，不依赖 server
-  const { characterNames, locationNames } = buildNameMaps(
-    options.world && String(options.world) !== worldId ? String(options.world) : null,
-  );
+  //
+  // ⚠ 用 **server 告诉我们的 worldId**，不是 `options.world`。
+  //
+  // 之前这里传 `null`（意思是「选 mtime 最新的世界」），而 server
+  // 跑的世界未必是 mtime 最新的 —— server 跑的时候会写文件，mtime 会变。
+  // 结果：tick 的是 A 世界的模拟，名字却从 B 世界读，显示成裸 id。
+  //
+  // 显式传了 `--world` 但跟 server 当前的不一致时，server 会拒绝
+  // 这次 tick（400），所以走到这里两者必然一致 —— 用 worldId 是对的。
+  const { characterNames, locationNames } = buildNameMaps(worldId);
   const summaries = await renderEvents(data.events, characterNames, locationNames);
 
   emit({
@@ -96,8 +103,8 @@ export async function cmdTick({ options, flags }) {
 
       if (summaries.length > 0) {
         section("事件", () => {
-          for (const line of summaries) {
-            console.log(`  ${line}`);
+          for (const { summary } of summaries) {
+            console.log(`  ${summary}`);
           }
         });
       }

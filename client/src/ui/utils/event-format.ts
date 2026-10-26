@@ -26,6 +26,9 @@ const ACTION_KEY_MAP: Record<string, string> = {
   in_conversation: "eventFormat.actionInConversation",
   traveling: "eventFormat.actionTraveling",
   idle: "eventFormat.actionIdle",
+  // 对话结束后的空闲期 —— 引擎内部标记，没有 actionName，
+  // 不映射的话会显示成裸 id「post_dialogue」。
+  post_dialogue: "eventFormat.actionPostDialogue",
   fish: "eventFormat.actionFish",
   explore: "eventFormat.actionExplore",
   repair: "eventFormat.actionRepair",

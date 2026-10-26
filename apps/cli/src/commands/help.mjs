@@ -22,7 +22,9 @@ export function printHelp(commands) {
 
   const width = Math.max(...Object.keys(commands).map((k) => k.length));
   for (const [name, entry] of Object.entries(commands)) {
-    const marker = entry.needsServer ? " [要 server]" : "";
+    // 两种都标 —— 只标「要 server」的话，
+    // 看到没标记的还得去翻文档才知道它**不需要** server。
+    const marker = entry.needsServer ? " [要 server]" : " [离线可用]";
     console.log(`  ${name.padEnd(width)}  ${entry.summary}${marker}`);
   }
 

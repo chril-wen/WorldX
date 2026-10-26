@@ -61,10 +61,64 @@ export function buildLocationNameMap(worldDir) {
 }
 
 /**
+ * 建世界动作 id → 名字的映射。
+ *
+ * world.json 的 `worldActions` 段：
+ * ```json
+ * { "id": "stroll_and_observe", "name": "闲逛观察" }
+ * ```
+ *
+ * 角色状态里的 `currentAction` 存的是**动作 id**（`stroll_and_observe`），
+ * 不查这张表就只能显示裸 id。
+ *
+ * @param {string} worldDir
+ * @returns {Map<string, string>}
+ */
+export function buildActionNameMap(worldDir) {
+  const map = new Map();
+  try {
+    const config = readWorldConfig(worldDir);
+    for (const action of config.worldActions ?? []) {
+      if (action?.id) map.set(action.id, action.name ?? action.id);
+    }
+  } catch {
+    // 读不到就空着 —— 渲染会退回 id
+  }
+  return map;
+}
+
+/**
+ * 建主区域点位 id → 名字的映射。
+ *
+ * world.json 的 `mainAreaPoints` 段：`main_area_point_1` → 「主区域点位1」。
+ *
+ * @param {string} worldDir
+ * @returns {Map<string, string>}
+ */
+export function buildPointNameMap(worldDir) {
+  const map = new Map();
+  try {
+    const config = readWorldConfig(worldDir);
+    for (const point of config.mainAreaPoints ?? []) {
+      if (point?.id) map.set(point.id, point.name ?? point.id);
+    }
+  } catch {
+    // 读不到就空着
+  }
+  return map;
+}
+
+/**
  * 两个映射一起建。
  *
  * @param {string|null} [worldId]
- * @returns {{characterNames: Map<string,string>, locationNames: Map<string,string>, worldDir: string}}
+ * @returns {{
+ *   characterNames: Map<string,string>,
+ *   locationNames: Map<string,string>,
+ *   actionNames: Map<string,string>,
+ *   pointNames: Map<string,string>,
+ *   worldDir: string
+ * }}
  */
 export function buildNameMaps(worldId) {
   const worldDir = resolveWorldDir(worldId);
@@ -72,5 +126,7 @@ export function buildNameMaps(worldId) {
     worldDir,
     characterNames: buildCharacterNameMap(worldDir),
     locationNames: buildLocationNameMap(worldDir),
+    actionNames: buildActionNameMap(worldDir),
+    pointNames: buildPointNameMap(worldDir),
   };
 }

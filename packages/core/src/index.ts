@@ -77,6 +77,7 @@ export { buildPerception } from "./simulation/perceiver.js";
 export { buildActionMenu } from "./simulation/action-menu-builder.js";
 export { executeAction, completeAction } from "./simulation/action-executor.js";
 export {
+  actionLabel,
   eventTypeLabel,
   extractEventActionName,
   extractEventSummary,
