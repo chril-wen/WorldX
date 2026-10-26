@@ -1,0 +1,66 @@
+# CI —— 每次 push / PR 跑一遍
+#
+# ## 为什么只有单元测试和类型检查
+#
+# 验证脚本（`verify-phase4.mjs`、`phase4-smoke.mjs`、冒烟对比）需要
+# **真实世界 fixture** —— 几十 MB 的 world.json + TMJ，跑起来慢，
+# 而且要生成器产出的东西才能跑。
+#
+# CI 里跑它们不现实：每次 push 都要等好几分钟，还得多一套 fixture 维护。
+# 所以那些**保留手动跑**，CI 只管「快的、确定的」那部分。
+#
+# ## 「忘了跑」是常态
+#
+# 仓库之前**没有** CI —— 阶段 2.5 靠的是每次手动跑。
+# 这不是纪律问题，是**没人会记得**。
+# 有了 CI，至少单元测试和类型检查永远不会漏。
+#
+# ## 为什么 Windows 不跑
+#
+# 好几个测试要 spawn 子进程（tsx 编译 TS），在 Windows 上并发时
+# 偶发失败。先让 Linux 跑通 —— 自用规模不值得为 CI 调并发。
+
+name: CI
+
+on:
+  push:
+    branches: [main, "refactor/**"]
+  pull_request:
+    branches: [main]
+
+# 同一个 PR 的多次 push 只跑最后一次 —— 省 CI 时间
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 类型检查 + 单元测试
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # 根目录的 lockfile 覆盖 workspaces（packages/*）——
+      # 但 client/ server/ orchestrator/ generators/ **不是** workspace，
+      # 它们各有各的 package.json 和 node_modules。
+      #
+      # 根上的 `npm ci` 会触发 postinstall，postinstall 正好装那四个 ——
+      # 所以**不需要**再单独装一遍。
+      #
+      # **不能**加 `--ignore-scripts`：vitest 依赖的 esbuild 靠 install
+      # script 装平台二进制（`node install.js`），跳过它 vitest 直接起不来。
+      # better-sqlite3（server 要）和 sharp（生成器要）同理。
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元测试
+        run: npm run test

@@ -5,7 +5,7 @@
   "repository": "git@github.com:YGYOOO/WorldX.git",
   "type": "module",
   "scripts": {
-    "postinstall": "cd client && npm install && cd ../server && npm install && cd ../orchestrator && npm install && cd ../generators && npm install",
+    "postinstall": "cd client && npm ci && cd ../server && npm ci && cd ../orchestrator && npm ci && cd ../generators && npm ci",
     "create": "node orchestrator/src/index.mjs",
     "cli": "node apps/cli/src/index.mjs",
     "dev": "node scripts/dev.mjs",
