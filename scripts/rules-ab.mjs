@@ -101,6 +101,51 @@ function worldJsonPath(worldDir) {
   throw new Error(`${worldDir} 里没有 world.json`);
 }
 
+/**
+ * 算「跑够多少 tick 才能跨过至少一个日末」。
+ *
+ * ## 为什么需要这个
+ *
+ * 记忆巩固（`processMemoryConsolidation`）**只在日末触发** ——
+ * 见 `packages/core/src/simulation/simulation-engine.ts` 的 `runEndOfDayDecay`。
+ *
+ * 而「一天多少 tick」由世界的场景配置决定：
+ * `tickDurationMinutes: 15` → 一天 96 tick。
+ *
+ * 之前这里硬编码 12 tick —— **跨不过日末**，于是：
+ * 巩固从不发生 → 长期记忆恒为 0 → A 轮和 B 轮**完全一样** →
+ * 「规则没接进链路」。
+ *
+ * 那是**假阴性**：规则其实接得很牢。跑够 tick 数就能看到差异
+ * （实测 100 tick → 「✅ 6 处不同」，长期记忆 22 → 5）。
+ *
+ * ## 怎么算
+ *
+ * 读 `config/scene.json` 的 `tickDurationMinutes`，
+ * 一天 = 1440 分钟，取 2 倍确保跨过日末（多跑一段看累积效果）。
+ *
+ * 读不到就用 96 —— 保守但安全（宁可多跑，不要漏掉日末）。
+ */
+function computeTickCount(worldDir, explicit) {
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  let minutes = null;
+  const scenePath = path.join(worldDir, "config", "scene.json");
+  if (fs.existsSync(scenePath)) {
+    try {
+      const scene = JSON.parse(fs.readFileSync(scenePath, "utf-8"));
+      if (Number.isFinite(scene.tickDurationMinutes) && scene.tickDurationMinutes > 0) {
+        minutes = scene.tickDurationMinutes;
+      }
+    } catch {
+      // 读不了就用默认值
+    }
+  }
+
+  const perDay = minutes ? Math.max(1, Math.round((24 * 60) / minutes)) : 96;
+  return perDay * 2;
+}
+
 // ─── 确定性假 LLM ───────────────────────────────────────────────────────
 
 /**
@@ -352,7 +397,10 @@ function buildBySchema(schema) {
 
 const worldDir = resolveWorldDir();
 const jsonPath = worldJsonPath(worldDir);
-const TICK_COUNT = Number(arg("--ticks", "12"));
+const TICK_COUNT = computeTickCount(
+  worldDir,
+  has("--ticks") ? Number(arg("--ticks")) : null,
+);
 
 console.log(`世界：${path.basename(worldDir)}`);
 console.log(`world.json：${jsonPath}`);

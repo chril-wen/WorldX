@@ -49,10 +49,26 @@ function ensureCoreBuilt(): void {
   }
 }
 
-function runAb(extraArgs: string[] = [], ticks = 12): string {
+/**
+ * 跑一次对拍。
+ *
+ * ## 为什么不传 `--ticks`
+ *
+ * 「一天多少 tick」由**世界的场景配置**决定 ——
+ * `config/scene.json` 的 `tickDurationMinutes`。
+ * 实测这个世界的 `tickDurationMinutes: 15` → 一天 **96** tick。
+ *
+ * 之前这里硬编码 12（方向性用 30），注释写「30 个 tick 能跨过一整天」——
+ * **那个假设是错的**。tick 不够就跨不过日末，记忆巩固不触发，
+ * 长期记忆恒为 0，A 和 B 自然完全一样 —— 报「规则没接进链路」。
+ *
+ * 那是个**假阴性**：规则其实接得很牢。改成不传 `--ticks`，
+ * 让脚本自己按场景配置算（跑 2 天）。
+ */
+function runAb(extraArgs: string[] = []): string {
   ensureCoreBuilt();
   try {
-    return execFileSync("node", [SCRIPT, "--ticks", String(ticks), ...extraArgs], {
+    return execFileSync("node", [SCRIPT, ...extraArgs], {
       cwd: REPO_ROOT,
       encoding: "utf-8",
       maxBuffer: 32 * 1024 * 1024,
@@ -65,15 +81,6 @@ function runAb(extraArgs: string[] = [], ticks = 12): string {
     throw err;
   }
 }
-
-/**
- * 跑多少个 tick。
- *
- * **必须够长**：记忆的巩固（转长期记忆）要跨过日末才发生。
- * 12 个 tick 只能看到「有差异」，看不到「长期记忆变少」这个方向。
- * 30 个 tick 能跨过一整天，方向性差异才稳定。
- */
-const TICKS_FOR_DIRECTION = 30;
 
 describe("长模拟对拍 —— 规则接进了整条链路", () => {
   it("A/A 对照：同样规则跑两遍，差异必须是 0", () => {
@@ -97,7 +104,7 @@ describe("长模拟对拍 —— 规则接进了整条链路", () => {
   }, 300_000);
 
   it("方向性：巩固门限拉高，长期记忆必须变少", () => {
-    const out = runAb([], TICKS_FOR_DIRECTION);
+    const out = runAb();
 
     // 脚本自己会断言方向，但这里再独立查一遍 ——
     // 脚本的断言逻辑写错了的话，测试也得能抓。
