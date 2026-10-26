@@ -21,6 +21,7 @@ import { api, apiOrThrow, isServerUp } from "../lib/api-client.mjs";
 import { emit, printRows, section } from "../lib/format.mjs";
 import { renderEvents } from "../lib/event-render.mjs";
 import { buildNameMaps } from "../lib/name-maps.mjs";
+import { buildDisplaySection } from "../lib/display-json.mjs";
 
 /**
  * 推进一个（或多个）tick。
@@ -83,12 +84,19 @@ export async function cmdTick({ options, flags }) {
   //
   // 显式传了 `--world` 但跟 server 当前的不一致时，server 会拒绝
   // 这次 tick（400），所以走到这里两者必然一致 —— 用 worldId 是对的。
-  const { characterNames, locationNames } = buildNameMaps(worldId);
-  const summaries = await renderEvents(data.events, characterNames, locationNames);
+  const names = buildNameMaps(worldId);
+  const rendered = await renderEvents(data.events, names.characterNames, names.locationNames);
+
+  // `--json` 时额外给一段人话 —— 原始事件一个不少，
+  // 脚本要「林哲」「主区域」用 `display`，要原始数据用 `events`。
+  const dataWithDisplay = {
+    ...data,
+    display: buildDisplaySection({ events: data.events, rendered, names }),
+  };
 
   emit({
-    data,
-    json: JSON.stringify(data, null, 2),
+    data: dataWithDisplay,
+    json: JSON.stringify(dataWithDisplay, null, 2),
     asJson,
     human: () => {
       const t = last.gameTime ?? {};
@@ -101,9 +109,9 @@ export async function cmdTick({ options, flags }) {
         ]);
       });
 
-      if (summaries.length > 0) {
+      if (rendered.length > 0) {
         section("事件", () => {
-          for (const { summary } of summaries) {
+          for (const { summary } of rendered) {
             console.log(`  ${summary}`);
           }
         });

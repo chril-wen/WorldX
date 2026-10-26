@@ -165,6 +165,30 @@ own-world timeline diff <timelineA> <timelineB>     # 对比
 `timeline` 是**转发**给 `scripts/timeline.mjs` 的 —— 快照和分叉是纯文件操作，
 不依赖 server 在跑。
 
+脚本负责**算数据**，`apps/cli/src/lib/timeline-render.mjs` 负责**打印** ——
+两边共用同一份渲染，所以 `own-world timeline` 和 `npm run timeline -- list`
+的输出**完全一样**，不会分叉出两套风格。
+
+对比两条时间线：
+
+```
+A：tl-fork-20261024-120231-hyoc 「如果当时没问陆先生」
+   第 1 天 21 帧，69 事件
+
+B：tl-fork-20261024-120342-vfe4 「如果当时没去问」
+   第 1 天 22 帧，72 事件
+
+角色状态差异：
+  沈四娘：
+    当前动作  A=       （无）  B=      拼桌闲谈
+    情绪效价  A=     0.499  B=     0.474  （差 -0.025）
+    情绪唤醒  A=     3.420  B=     3.399  （差 -0.021）
+    好奇    A=        76  B=        75  （差 -1）
+```
+
+字段是中文的、小数截断了、**并且带差值** —— 两个 17 位小数摆在一起，
+人眼看不出差了多少。
+
 ---
 
 ## 5. 给脚本用
@@ -178,6 +202,38 @@ own-world characters --json
 ```
 
 **两种格式从同一份数据生成** —— 不会出现「表格里有的字段 JSON 里没有」。
+
+### 5.1 事件流带「人话」
+
+`tick --json` 和 `events --json` 的事件是**原始数据**（`actorId`、
+`location` 都是内部 id）—— 对「把事件流存进数据库」这类用途是对的，
+所以**没有替换**。想要人话用 `display` 段：
+
+```bash
+own-world events --json | jq '.display.summaries[].summary'
+own-world events --json | jq '.display.characterNames["char_1792860348082"]'
+```
+
+```json
+{
+  "events": [ ...原始事件，一个不少... ],
+  "display": {
+    "characterNames": { "char_1792860348082": "林哲" },
+    "locationNames": { "main_area": "主区域" },
+    "actionNames": { "stroll_and_observe": "闲逛观察" },
+    "pointNames": { "main_area_point_1": "主区域点位1" },
+    "summaries": [
+      { "eventId": "y5GvZz7UDwH7", "summary": "宋福 在主区域 找人攀谈" }
+    ]
+  }
+}
+```
+
+**为什么每条 summary 带 `eventId`**：整段对话会**替掉**它的单轮事件，
+所以 `summaries` 的数量**少于** `events` 的数量。带 id 才能可靠关联两者，
+按 index 取会错位。
+
+**为什么给完整映射表**而不只是当次用到的名字：脚本可能要处理**别的**事件。
 
 ---
 
@@ -208,11 +264,16 @@ apps/cli/
 │   │   ├── characters.mjs   角色
 │   │   ├── events.mjs       事件流
 │   │   ├── rules.mjs        → 转发 scripts/rules.mjs
-│   │   ├── timeline.mjs     → 转发 scripts/timeline.mjs
+│   │   ├── timeline.mjs     → 转发 scripts/timeline.mjs（拿 JSON 自己打印）
+│   │   ├── plugins.mjs      列出已加载的插件
 │   │   └── help.mjs         帮助
 │   └── lib/
 │       ├── args.mjs         参数解析
 │       ├── format.mjs       输出格式
+│       ├── timeline-render.mjs  时间线的显示（跟 scripts/timeline.mjs 共用）
+│       ├── display-json.mjs     JSON 里的「人话」段
+│       ├── event-render.mjs     事件 → 一行人话
+│       ├── name-maps.mjs        角色 / 地点 / 动作 / 点位的名字映射
 │       ├── api-client.mjs   HTTP 客户端
 │       ├── world-paths.mjs  世界寻址（跟 scripts/ 共用）
 │       ├── core-loader.mjs  加载 core 的 TS

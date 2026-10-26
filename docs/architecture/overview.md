@@ -110,7 +110,7 @@ import { parseTmj } from "@own-world/core";                        // ❌
 | **游戏画面** | `client/src/scenes/WorldScene.ts` | Phaser，927 行 |
 | **角色在地图上移动** | `client/src/systems/CharacterMovement.ts` | 547 行 |
 | **世界规则 CLI** | `scripts/rules.mjs` | 改规则的界面 |
-| **时间线 / 快照** | `scripts/timeline.mjs` | 快照、分叉、对比 |
+| **时间线 / 快照** | `scripts/timeline.mjs` | 快照、分叉、对比（显示在 `apps/cli/src/lib/timeline-render.mjs`，两边共用） |
 
 ---
 

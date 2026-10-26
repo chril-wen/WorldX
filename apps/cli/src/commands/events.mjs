@@ -16,6 +16,7 @@ import { apiOrThrow, isServerUp } from "../lib/api-client.mjs";
 import { emit, section } from "../lib/format.mjs";
 import { renderEvents } from "../lib/event-render.mjs";
 import { buildNameMaps } from "../lib/name-maps.mjs";
+import { buildDisplaySection } from "../lib/display-json.mjs";
 
 /**
  * 看事件。
@@ -51,12 +52,19 @@ export async function cmdEvents({ options, flags }) {
   // 所以这里要另外问一次 server「现在是哪个世界」。
   const worlds = await apiOrThrow("GET", "/api/world/worlds");
   const worldId = options.world ?? worlds.currentWorldId ?? null;
-  const { characterNames, locationNames } = buildNameMaps(worldId);
-  const summaries = await renderEvents(events, characterNames, locationNames);
+  const names = buildNameMaps(worldId);
+  const rendered = await renderEvents(events, names.characterNames, names.locationNames);
+
+  // `--json` 时额外给一段人话 —— 原始事件一个不少，
+  // 脚本要「林哲」「主区域」用 `display`，要原始数据用 `events`。
+  const dataWithDisplay = {
+    ...data,
+    display: buildDisplaySection({ events, rendered, names }),
+  };
 
   emit({
-    data,
-    json: JSON.stringify(data, null, 2),
+    data: dataWithDisplay,
+    json: JSON.stringify(dataWithDisplay, null, 2),
     asJson,
     human: () => {
       if (events.length === 0) {
@@ -67,8 +75,8 @@ export async function cmdEvents({ options, flags }) {
       // 所以显示条数比原始事件数少，显示原始数会让人以为少了内容。
       //
       // （注意不是行数 —— 整段对话会展开成多行。）
-      section(`事件（${summaries.length}）`, () => {
-        for (const { event: e, summary } of summaries) {
+      section(`事件（${rendered.length}）`, () => {
+        for (const { event: e, summary } of rendered) {
           const when = e.gameDay != null ? `第${e.gameDay}天` : "";
           console.log(`  ${when}  ${summary}`);
         }

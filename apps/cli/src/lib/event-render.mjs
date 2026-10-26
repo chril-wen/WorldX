@@ -152,3 +152,31 @@ export async function renderEvents(events, nameMap, locationMap) {
   }
   return out;
 }
+
+/**
+ * 把渲染结果转成「带事件 id 的人话」列表。
+ *
+ * ## 为什么每条要带 eventId
+ *
+ * `renderEvents` 会**跳过**被整段对话取代的单轮事件 ——
+ * 所以摘要的数量**少于**事件的数量。
+ *
+ * 两种做法：
+ *
+ * 1. 摘要跟事件**一一对应**，被跳过的填 `null`
+ *    —— 脚本按 index 取会拿到一堆 null，得自己过滤
+ * 2. 每条摘要**带自己的 eventId**
+ *    —— 脚本按 id 关联，或者顺序读，都不会错位
+ *
+ * 选 2。而且 `events` 数组本身**一个不少**（原始数据），
+ * 脚本要完整的就用那个 —— 两个数组各司其职。
+ *
+ * @param {Array<{event: object, summary: string}>} rendered
+ * @returns {Array<{eventId: string, summary: string}>}
+ */
+export function toDisplaySummaries(rendered) {
+  return rendered.map(({ event, summary }) => ({
+    eventId: event.id,
+    summary,
+  }));
+}
