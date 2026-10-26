@@ -69,7 +69,9 @@ const plugin: WorldPlugin = {
   name: "hello",
 
   design(design, ctx) {
-    console.log(`[${ctx.logPrefix}] 我看到的世界叫 ${design.worldName}`);
+    // ⚠ `ctx.logPrefix` 本身就已经是 "[Plugin]" —— 别再套一层方括号，
+    // 否则日志会变成 "[[Plugin]]"。
+    console.log(`${ctx.logPrefix} 我看到的世界叫 ${design.worldName}`);
     return design;          // 返回新对象；不改就 return 或者什么都不返回
   },
 };
