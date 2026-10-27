@@ -3,10 +3,17 @@
   "configurations": [
     {
       "name": "client",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "client",
+      "cwd": "E:/WordX/OWN-World/client",
       "port": 3200
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "E:/WordX/OWN-World/server",
+      "port": 3100
     }
   ]
 }
