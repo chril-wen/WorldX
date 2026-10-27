@@ -8,5 +8,15 @@
     "sourceMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    // `src/testing/` 里的东西是**测试专用**的辅助工具，不进包。
+    //
+    // 注意跟 `packages/core/src/testing/` 的区别 ——
+    // core 那边的内存版存储适配器是**生产代码**（server 测数据库时用），
+    // 所以它在包里。这里的 git 基准提取器只在 A/B 对比测试里用，
+    // 而且它 import 了 `node:child_process`（跑 git show）——
+    // 打进浏览器 bundle 是没意义的。
+    "src/testing/**/*"
+  ]
 }

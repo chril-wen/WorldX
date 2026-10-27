@@ -18,3 +18,6 @@ library/worlds/*/timelines/
 # 插件测试的临时目录（跑测试时建在仓库内，因为 vitest 只能 transform 项目内的文件）
 orchestrator/src/.tmp-plugin-tests/
 orchestrator/src/.tmp-rules-cli-/
+
+# A/B 对比测试的基准缓存 —— 从 git 历史现场提取，跑完可以删
+packages/client-core/src/testing/.tmp-legacy-baseline/

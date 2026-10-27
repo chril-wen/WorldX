@@ -26,10 +26,12 @@ const ROOT = join(__dirname, "..");
 /**
  * 改造前的解析实现 —— 从 git 里按原样取出。
  *
- * 跟 `packages/client-core/src/ab-comparison.test.ts` 用的是同一份基准。
- * 这个脚本面向**真实世界**，那个测试面向**人造地图**。
+ * 跟 `packages/client-core/src/ab-comparison.test.ts` 用的是同一份基准
+ * （那个测试面向**人造地图**，这个脚本面向**真实世界**）。
+ *
+ * 基准的提取逻辑在 `packages/client-core/src/testing/legacy-baseline.ts` ——
+ * 复用同一份实现，免得两处各写一遍、以后分家。
  */
-const LEGACY_DIR = join(ROOT, ".legacy-baseline");
 
 /** 找到仓库里所有真实世界 */
 function findWorlds() {
@@ -54,12 +56,23 @@ async function loadCoreParser() {
   return tsImport(pathToFileURL(corePath).href, import.meta.url);
 }
 
-/** 加载改造前的 MapManager */
+/** 加载改造前的 MapManager —— 从 git 历史提取 */
 async function loadLegacyMapManager() {
-  const legacyPath = join(LEGACY_DIR, "MapManager.ts");
   const { tsImport } = await import("tsx/esm/api");
-  const mod = await tsImport(pathToFileURL(legacyPath).href, import.meta.url);
-  return mod.MapManager;
+  const { loadLegacyBaseline } = await tsImport(
+    pathToFileURL(
+      join(ROOT, "packages", "client-core", "src", "testing", "legacy-baseline.ts"),
+    ).href,
+    import.meta.url,
+  );
+  const loaded = await loadLegacyBaseline();
+  if (!loaded.ok) {
+    // 拿不到基准就**跳过**，不报错 ——
+    // 这是辅助验证，不是产品检查。
+    console.log(`[Smoke] 跳过 —— 拿不到改造前基准：${loaded.reason}`);
+    return null;
+  }
+  return loaded.MapManager;
 }
 
 /** 加载新的 MapManager */
@@ -142,6 +155,12 @@ async function main() {
     loadLegacyMapManager(),
     loadNewMapManager(),
   ]);
+
+  // 基准拿不到 —— 跳过整个对比，只报告「没做这项验证」。
+  if (!LegacyMapManager) {
+    console.log("[Smoke] 跳过 —— 没有基准可比对");
+    return 0;
+  }
 
   let totalProblems = 0;
 

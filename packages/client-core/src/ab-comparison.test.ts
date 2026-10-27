@@ -12,24 +12,27 @@
  * 全仓唯一零测试的核心类）。
  *
  * 所以这里不是「新实现的自我验证」——**基准是改造前的字面实现**，
- * 放在 `.legacy-baseline/`，从 git 里按原样取出来的。
+ * 从 git 历史里按原样取出来（见 `testing/legacy-baseline.ts`）。
  * 新实现跟它逐点比，差一个点就是回归。
+ *
+ * ## 基准从哪来
+ *
+ * 原来基准是仓库里的一份代码副本（`.legacy-baseline/`）。
+ * 那种做法有个坏处：**仓库里多一份重复代码** ——
+ * 改 `MapManager` 的人得记得基准也要改，忘了 A/B 就变成自证清白。
+ *
+ * 现在基准从 git 提取，**没人能顺手改它**。
+ * 拿不到基准时（浅克隆、没有 .git）**跳过，不红** ——
+ * 基准是辅助验证，不是产品逻辑。
  *
  * ## 这个文件不进包
  *
- * `.legacy-baseline/` 在 tsconfig 的 exclude 之外但不在 `src/` 下，
- * 所以不会被 `npm run build:client-core` 编译进产物。
- * 它只在测试里被 import 一次。
- *
- * ## 删掉它的时机
- *
- * 阶段 5 验收通过、下一阶段不再需要 A/B 之后，整个目录删掉。
- * 留着的唯一价值是「能跟改造前比」，没有别的理由留着。
+ * 基准在 `node_modules/.cache/` 下，测试跑的时候现提取现用。
+ * 它不进 `npm run build:client-core` 的产物。
  */
 
 import { describe, it, expect } from "vitest";
-import { MapManager as LegacyMapManager } from "../../../.legacy-baseline/MapManager.js";
-import { PathfindingManager as LegacyPathfindingManager } from "../../../.legacy-baseline/PathfindingManager.js";
+import { loadLegacyBaseline } from "./testing/legacy-baseline.js";
 import { MapManager } from "./map-model.js";
 import { PathfindingManager } from "./pathfinding.js";
 
@@ -116,7 +119,10 @@ function center(gx: number, gy: number, tile = 32) {
 /**
  * 对同一份 TMJ 同时跑两套实现，比对解析结果。
  */
-function compareParsing(tmj: ReturnType<typeof makeTiled>) {
+function compareParsing(
+  tmj: ReturnType<typeof makeTiled>,
+  LegacyMapManager: new () => any,
+) {
   const legacy = new LegacyMapManager();
   const modern = new MapManager();
   legacy.loadFromTiledJSON(tmj as any);
@@ -152,14 +158,15 @@ async function comparePath(
   tmj: ReturnType<typeof makeTiled>,
   from: { gx: number; gy: number },
   to: { gx: number; gy: number },
+  legacy: { MapManager: new () => any; PathfindingManager: new (map: any) => any },
   tile = 32,
 ) {
-  const legacyMap = new LegacyMapManager();
+  const legacyMap = new legacy.MapManager();
   const modernMap = new MapManager();
   legacyMap.loadFromTiledJSON(tmj as any);
   modernMap.loadFromTiledJSON(tmj as any);
 
-  const legacyPf = new LegacyPathfindingManager(legacyMap);
+  const legacyPf = new legacy.PathfindingManager(legacyMap);
   const modernPf = new PathfindingManager(modernMap);
 
   const f = center(from.gx, from.gy, tile);
@@ -173,12 +180,54 @@ async function comparePath(
   return { legacyPath, modernPath };
 }
 
+/**
+ * 基准 —— 从 git 历史提取的改造前实现。
+ *
+ * 拿不到（浅克隆 / 没有 .git）就**跳过整组测试**，不红。
+ * 基准是辅助验证，不是产品逻辑 —— 拿不到它说明「这次没做这项验证」，
+ * 而不是「产品坏了」。
+ *
+ * ## 为什么是顶层 await，不是 beforeAll
+ *
+ * `it.skipIf(条件)` 的条件在**收集阶段**求值 —— 也就是 vitest 收集
+ * 测试用例的时候。那会儿 `beforeAll` 还没跑，`baseline` 还是 null，
+ * 于是**全部**用例都会被跳过。
+ *
+ * 顶层 await 在收集之前就完成加载，条件才拿得到真值。
+ */
+const loaded = await loadLegacyBaseline();
+const baseline: {
+  MapManager: new () => any;
+  PathfindingManager: new (map: any) => any;
+} | null = loaded.ok
+  ? { MapManager: loaded.MapManager, PathfindingManager: loaded.PathfindingManager }
+  : null;
+
+// 基准拿不到时把原因打出来 —— 否则「跳过了 15 条」会让人以为测试没跑。
+if (!baseline) {
+  console.warn(
+    `[A/B 对比] 跳过 —— 拿不到改造前基准：${loaded.reason}\n` +
+      `  这不是失败，是「这次没做 A/B 验证」。CI 里靠 fetch-depth: 0 拿到基准。`,
+  );
+}
+
+/**
+ * 基准不可用时跳过。
+ *
+ * `it.skipIf` 收的是**布尔值**，不是返回布尔值的函数 ——
+ * 传函数的话那个函数本身是真值，于是**全部**用例都被跳过
+ * （而且不报错，很难发现）。
+ *
+ * 基准在顶层 await 里已经解析完了，所以这里直接给布尔值。
+ */
+const itWithBaseline = it.skipIf(baseline === null);
+
 describe("改造前 vs 改造后：解析结果一致", () => {
-  it("空地图", () => {
-    compareParsing(openMap(10, 10));
+  itWithBaseline("空地图", () => {
+    compareParsing(openMap(10, 10), baseline!.MapManager);
   });
 
-  it("有区域和物件的地图", () => {
+  itWithBaseline("有区域和物件的地图", () => {
     compareParsing(
       makeTiled({
         width: 12,
@@ -193,10 +242,11 @@ describe("改造前 vs 改造后：解析结果一致", () => {
           { objectId: "obj_stall", name: "摊子", x: 160, y: 96, w: 32, h: 32 },
         ],
       }),
+      baseline!.MapManager,
     );
   });
 
-  it("区域缺 id 时两边都跳过", () => {
+  itWithBaseline("区域缺 id 时两边都跳过", () => {
     const tmj = makeTiled({
       width: 10,
       height: 10,
@@ -211,10 +261,10 @@ describe("改造前 vs 改造后：解析结果一致", () => {
       height: 32,
       properties: [],
     });
-    compareParsing(tmj);
+    compareParsing(tmj, baseline!.MapManager);
   });
 
-  it("物件缺 objectId 时两边都跳过", () => {
+  itWithBaseline("物件缺 objectId 时两边都跳过", () => {
     const tmj = makeTiled({
       width: 10,
       height: 10,
@@ -228,54 +278,54 @@ describe("改造前 vs 改造后：解析结果一致", () => {
       height: 32,
       properties: [],
     });
-    compareParsing(tmj);
+    compareParsing(tmj, baseline!.MapManager);
   });
 
-  it("tilewidth 不是 32 时也一致", () => {
-    compareParsing(openMap(8, 8, 16));
+  itWithBaseline("tilewidth 不是 32 时也一致", () => {
+    compareParsing(openMap(8, 8, 16), baseline!.MapManager);
   });
 });
 
 describe("改造前 vs 改造后：寻路结果逐点一致", () => {
-  it("空地直路", async () => {
-    await comparePath(openMap(10, 10), { gx: 0, gy: 0 }, { gx: 5, gy: 0 });
+  itWithBaseline("空地直路", async () => {
+    await comparePath(openMap(10, 10), { gx: 0, gy: 0 }, { gx: 5, gy: 0 }, baseline!);
   });
 
-  it("空地斜线", async () => {
-    await comparePath(openMap(10, 10), { gx: 0, gy: 0 }, { gx: 7, gy: 4 });
+  itWithBaseline("空地斜线", async () => {
+    await comparePath(openMap(10, 10), { gx: 0, gy: 0 }, { gx: 7, gy: 4 }, baseline!);
   });
 
-  it("起点即终点", async () => {
-    await comparePath(openMap(10, 10), { gx: 3, gy: 3 }, { gx: 3, gy: 3 });
+  itWithBaseline("起点即终点", async () => {
+    await comparePath(openMap(10, 10), { gx: 3, gy: 3 }, { gx: 3, gy: 3 }, baseline!);
   });
 
-  it("终点被阻挡（挪到最近可走格）", async () => {
+  itWithBaseline("终点被阻挡（挪到最近可走格）", async () => {
     const collision = new Array(100).fill(0);
     collision[5 * 10 + 5] = 1;
     const tmj = makeTiled({ width: 10, height: 10, collision });
-    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 5, gy: 5 });
+    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 5, gy: 5 }, baseline!);
   });
 
-  it("起点被完全封死", async () => {
+  itWithBaseline("起点被完全封死", async () => {
     const collision = new Array(100).fill(0);
     collision[0] = 1;
     collision[1] = 1;
     collision[10] = 1;
     const tmj = makeTiled({ width: 10, height: 10, collision });
-    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 5, gy: 5 });
+    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 5, gy: 5 }, baseline!);
   });
 
-  it("有墙的地图（绕行）", async () => {
+  itWithBaseline("有墙的地图（绕行）", async () => {
     const collision = new Array(100).fill(0);
     for (let y = 0; y < 10; y++) {
       if (y === 5) continue;
       collision[y * 10 + 5] = 1;
     }
     const tmj = makeTiled({ width: 10, height: 10, collision });
-    await comparePath(tmj, { gx: 1, gy: 1 }, { gx: 9, gy: 8 });
+    await comparePath(tmj, { gx: 1, gy: 1 }, { gx: 9, gy: 8 }, baseline!);
   });
 
-  it("宽斜通道（触发楼梯重塑）", async () => {
+  itWithBaseline("宽斜通道（触发楼梯重塑）", async () => {
     // 3 格宽的对角通道 —— 让 reshapeStaircaseRun 有发挥空间
     const w = 20;
     const h = 20;
@@ -286,10 +336,10 @@ describe("改造前 vs 改造后：寻路结果逐点一致", () => {
       collision[i * w + i + 2] = 0;
     }
     const tmj = makeTiled({ width: w, height: h, collision });
-    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 13, gy: 13 });
+    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 13, gy: 13 }, baseline!);
   });
 
-  it("窄斜通道", async () => {
+  itWithBaseline("窄斜通道", async () => {
     const w = 20;
     const h = 20;
     const collision = new Array(w * h).fill(1);
@@ -298,21 +348,21 @@ describe("改造前 vs 改造后：寻路结果逐点一致", () => {
       collision[i * w + i + 1] = 0;
     }
     const tmj = makeTiled({ width: w, height: h, collision });
-    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 13, gy: 13 });
+    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 13, gy: 13 }, baseline!);
   });
 
-  it("密集障碍的地图（多种子）", async () => {
+  itWithBaseline("密集障碍的地图（多种子）", async () => {
     // 多种子覆盖不同的绕行形态 ——
     // 单一种子可能碰巧不触发某条代码路径。
     for (const seed of [1, 7, 42, 1234, 99991]) {
       const tmj = structuredMap(24, 24, seed, 0.25);
-      await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 20, gy: 20 });
-      await comparePath(tmj, { gx: 2, gy: 3 }, { gx: 18, gy: 5 });
+      await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 20, gy: 20 }, baseline!);
+      await comparePath(tmj, { gx: 2, gy: 3 }, { gx: 18, gy: 5 }, baseline!);
     }
   });
 
-  it("密集障碍 + tilewidth 16", async () => {
+  itWithBaseline("密集障碍 + tilewidth 16", async () => {
     const tmj = structuredMap(20, 20, 555, 0.3);
-    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 17, gy: 15 }, 16);
+    await comparePath(tmj, { gx: 0, gy: 0 }, { gx: 17, gy: 15 }, baseline!, 16);
   });
 });

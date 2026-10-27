@@ -1,0 +1,15 @@
+{
+  // 单独检查「被主 tsconfig 排除、但仍然是代码」的文件。
+  //
+  // `packages/client-core/src/testing/` 里的东西是**测试专用**的辅助工具，
+  // 不进包（主 tsconfig 排除了它们）。但排除 ≠ 不检查 ——
+  // 排除只是「不产出 dist」，类型错误照样该抓。
+  //
+  // `noEmit: true` —— 只检查，不产出。
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/testing/**/*"]
+}

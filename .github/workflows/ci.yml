@@ -40,6 +40,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # **要完整历史** —— A/B 对比测试的基准是从 git 里提取的
+          # （改造前的 MapManager / PathfindingManager）。
+          # 默认的浅克隆（depth=1）拿不到那个 commit，
+          # 基准会拿不到 → 那 15 条测试被跳过。
+          #
+          # 代价是 clone 慢一点。这个仓库不大，可以接受。
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
