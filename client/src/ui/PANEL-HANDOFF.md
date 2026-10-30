@@ -21,6 +21,58 @@
 
 ---
 
+## 你在哪个目录工作
+
+**面板分支有独立的 worktree**：`E:\WordX\OWN-World-8.3-panel`
+
+```
+E:\WordX\OWN-World            →  refactor/phase-8-3-runtime   （生产侧，已完成）
+E:\WordX\OWN-World-8.3-panel  →  refactor/phase-8-3-ui-panel   ← 你在这里
+```
+
+**两个目录互不干扰**，可以同时开着。
+
+⚠ **worktree 里有几个坑，已经踩过并解决了**（如果你重新建 worktree，照着做）：
+
+1. **`node_modules` 不会自动跟过去** —— worktree 是干净的检出。
+   这里的做法是**做 Windows 目录联接（junction）**，指向主检出的：
+   ```
+   mklink /J node_modules            E:\WordX\OWN-World\node_modules
+   mklink /J client\node_modules     E:\WordX\OWN-World\client\node_modules
+   mklink /J server\node_modules     E:\WordX\OWN-World\server\node_modules
+   mklink /J packages\core\node_modules     E:\WordX\OWN-World\packages\core\node_modules
+   mklink /J orchestrator\node_modules       E:\WordX\OWN-World\orchestrator\node_modules
+   mklink /J generators\node_modules         E:\WordX\OWN-World\generators\node_modules
+   ```
+   ⚠ `packages/client-core` **不用**联接 —— 它本来就没有自己的
+   `node_modules`（依赖 `eventemitter3` 从根 `node_modules` 解析）。
+
+2. **构建产物不在 git 里** —— worktree 里**没有** `packages/core/dist`
+   和 `server/dist`，而 `orchestrator` 的测试**要**它们。
+   建完 worktree 先跑：
+   ```bash
+   npm run build:core && npm run build:server
+   ```
+   不跑的话会有 18 个测试**假红**（报 `Cannot find module`）。
+
+3. **真实世界数据不在 git 里** —— `output/worlds/*/` 和 `server/data`
+   是 gitignore 的运行期数据。CLI 和 orchestrator 的测试**要**它们：
+   ```
+   mklink /J output\worlds  E:\WordX\OWN-World\output\worlds
+   mklink /J server\data    E:\WordX\OWN-World\server\data
+   ```
+
+**这四步做完，`npm run typecheck` 和 `npm test` 就都绿了**（本 worktree 已验证：
+typecheck 0 错误，**875 / 875 测试全过**）。
+
+> 📄 **这份文档本身就在面板分支上**（提交 `9c85e10`）——
+> 也就是说，**文档是在分支建好之后才写的**。
+> 如果你从 `refactor/phase-8-3-event-contract`（接缝分支）出发，
+> 先 `git merge refactor/phase-8-3-ui-panel` 拿这份文档，
+> 或者直接看 worktree 里的这份。
+
+---
+
 ## 你的任务是什么
 
 **把面板层（`client/src/ui/**`）从 Phaser 的 EventBus 换到契约的总线上，
