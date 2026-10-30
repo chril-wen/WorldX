@@ -21,3 +21,4 @@ orchestrator/src/.tmp-rules-cli-/
 
 # A/B 对比测试的基准缓存 —— 从 git 历史现场提取，跑完可以删
 packages/client-core/src/testing/.tmp-legacy-baseline/
+packages/client-core/src/testing/.tmp-legacy-scene-baseline/

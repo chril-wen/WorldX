@@ -118,6 +118,55 @@ export {
   worldToScreen,
 } from "./render/render-model.js";
 
+/**
+ * 场景构建器 —— 把「世界状态」翻译成「要画什么」。
+ *
+ * **位置计算全在这里**（client-core），渲染实现只负责乘变换矩阵。
+ *
+ * 跟 `render-model.ts` 分开是刻意的：
+ * 契约层是**类型**（不能改），构建器是**实现**（可以迭代）。
+ */
+export {
+  buildRenderScene,
+  getBubbleAnchorOffsetY,
+  getHeadWorldOffset,
+  getIdleFrame,
+  getSortFootY,
+  hitTestScene,
+  resolveCharacterPlacements,
+  SCENE_LAYER_DEPTHS,
+  SCENE_LAYER_IDS,
+} from "./render/scene-builder.js";
+export type {
+  CharacterRenderState,
+  DebugOverlayToggles,
+  DialogueBubbleState,
+  FacingDirection,
+  SceneBuilderInput,
+  TextMeasurer,
+} from "./render/scene-builder.js";
+
+/**
+ * 角色的显示度量 —— 世界单位的尺寸。
+ *
+ * 跟着位置逻辑一起搬进 client-core：
+ * 气泡挂多高、名牌挂多高、谁盖住谁 —— 这些都是位置。
+ */
+export {
+  actionToEmoji,
+  createCharacterDisplayMetrics,
+  getCharacterColor,
+  toCssColor,
+  ACTION_EMOJI,
+  CHARACTER_COLORS,
+  SPRITE_COLUMNS,
+  SPRITE_FRAME_HEIGHT,
+  SPRITE_FRAME_WIDTH,
+  SPRITE_ROWS,
+  SPRITE_WALK_FRAME_RATE,
+} from "./render/character-metrics.js";
+export type { CharacterDisplayMetrics } from "./render/character-metrics.js";
+
 export type {
   CameraStatePayload,
   CharacterSummary,

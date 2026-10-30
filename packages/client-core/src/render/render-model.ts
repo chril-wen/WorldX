@@ -165,6 +165,24 @@ export interface DrawPolygon {
 export interface DrawText {
   kind: "text";
   id: string;
+  /**
+   * 文本框的**左上角**（世界坐标）。
+   *
+   * ## 为什么是左上角而不是基线
+   *
+   * 现有画法里这些文字是 Phaser 的 `Text`（默认 `origin(0, 0)`）——
+   * 也就是「左上角对齐」。契约用同一个约定，
+   * 渲染实现就不用猜「y 是基线还是顶边」了
+   * （猜错的话，整排标签会高低错落一个字）。
+   *
+   * ## 框指的是**含背景的整个盒子**
+   *
+   * 给了 `background` / `padding` 时，框 = 文字盒 + 内边距；
+   * 文字本身画在 `(x + padding.left, y + padding.top)`。
+   *
+   * 这跟 Phaser 的 `Text` 一个语义（它的 `width` 就是
+   * `文字盒 + 左右内边距`）。
+   */
   x: number;
   y: number;
   content: string;
@@ -179,6 +197,79 @@ export interface DrawText {
   color: string;
   align?: "left" | "center" | "right";
   /**
+   * 描边颜色。
+   *
+   * 现有画法里区域名 / 物件名 / 悬停标签都用黑色描边（`#000000`，粗细 2）——
+   * 描边是**可读性的一部分**（浅色背景上也要看得清），
+   * 少了它标签就跟背景糊在一起。
+   */
+  stroke?: string;
+  /**
+   * 描边粗细（像素）。
+   *
+   * 给 `stroke` 时才有意义。
+   *
+   * ## 注意：描边**占尺寸**
+   *
+   * 描边是往外画的，所以它让文本框**变大**：
+   *
+   * ```
+   * 宽 = ceil(文字宽 + 描边粗细) + 左右内边距
+   * 高 = 文字行高 + 描边粗细 + 上下内边距
+   * ```
+   *
+   * （公式照抄 Phaser 的 `GetTextSize`。）
+   */
+  strokeThickness?: number;
+  /**
+   * 背景色（CSS 字符串）。
+   *
+   * 现有画法里区域名 / 物件名是**带深色底的 chip**：
+   * `backgroundColor: "rgba(0, 0, 0, 0.65)"`。
+   *
+   * **为什么放在文字上而不是拆成两个图元** ——
+   * 因为老实现里它就是**一个** Phaser `Text`
+   * （背景和字在同一个 canvas 上）。
+   * 拆成两个图元，渲染实现就得自己判断「哪个矩形是这块字的底」——
+   * 那是可以走偏的地方。
+   */
+  background?: string;
+  /**
+   * 背景不透明度（0~1）。
+   *
+   * 给 `background` 时才有意义。
+   *
+   * 契约的颜色**一律用 CSS 字符串**、透明度**一律用 `alpha` 字段** ——
+   * 所以这里不塞 `rgba()`。
+   */
+  backgroundAlpha?: number;
+  /**
+   * 内边距（像素）。
+   *
+   * 现有画法里 chip 的内边距是 `{ left: 6, right: 6, top: 3, bottom: 3 }`。
+   *
+   * 不给就是 0（文字紧贴框）。
+   */
+  padding?: {
+    left?: number;
+    right?: number;
+    top?: number;
+    bottom?: number;
+  };
+  /**
+   * 文本框的尺寸（像素）—— **含内边距，不含描边**。
+   *
+   * ## 什么时候需要给
+   *
+   * 给了 `background` 时**必须给** ——
+   * 渲染实现要靠它画背景矩形，而它自己不一定有字体引擎
+   * （或者量出来的宽度跟 builder 用的是不同的字体）。
+   *
+   * 不给背景时可以不填 —— 渲染实现自己量就行。
+   */
+  width?: number;
+  height?: number;
+  /**
    * 换行宽度上限（像素）。超过就折行。
    *
    * 现有画法里气泡文本用了 `wordWrap: { width, useAdvancedWrap: true }`。
@@ -192,8 +283,36 @@ export interface DrawText {
 export interface DrawSprite {
   kind: "sprite";
   id: string;
+  /**
+   * 锚点（世界坐标）—— **不是**图片的左上角。
+   *
+   * ## 为什么精灵要单独有 origin
+   *
+   * 现有画法里角色的贴图是 `setOrigin(0.5, 0.85)` ——
+   * 锚点在**贴图宽度的中间、高度的 85% 处**。
+   *
+   * 这不是随手写的：`0.85` 决定了「角色脚底在哪」和「头顶在哪」。
+   * 头顶位置又决定了名牌挂哪儿（见 `getHeadWorldOffset()`）。
+   *
+   * 契约里如果没有 origin，渲染实现会按「左上角对齐」或「居中」画 ——
+   * 角色会浮起来或者陷进地里，名牌也跟着错位。
+   *
+   * 默认值跟 Phaser 一致：`0.5` / `0.5`。
+   */
   x: number;
   y: number;
+  /**
+   * 水平锚点（0 = 左边缘，0.5 = 中心，1 = 右边缘）。
+   *
+   * 默认 0.5（Phaser 的默认值）。
+   */
+  originX?: number;
+  /**
+   * 垂直锚点（0 = 上边缘，0.5 = 中心，1 = 下边缘）。
+   *
+   * 默认 0.5（Phaser 的默认值）。角色的贴图用的是 **0.85**。
+   */
+  originY?: number;
   source: string;
   /** 帧号。贴图集（spritesheet）的帧索引。 */
   frame?: number;
@@ -330,6 +449,22 @@ export interface OverlayItem {
   actionIcon?: string;
   /** 缩放倍数 —— 渲染实现用它算字号（并按自己的规则 clamp）。 */
   zoom: number;
+  /**
+   * 是否在视口内。
+   *
+   * ## 为什么需要它
+   *
+   * 旧实现（`CharacterSprite.updateDomLabelPosition()`）会自己判断
+   * 「屏幕坐标离视口超过 120px 就把名牌 `display:none`」。
+   *
+   * 那一段**没有搬进 scene-builder** —— 契约层本来就没有这个字段。
+   * 结果是：视口外的角色仍然会产出名牌图元，
+   * 渲染实现要么全画出来（视口外一堆名牌），
+   * 要么自己重算一遍可见性（**位置逻辑就分散到两个地方了**）。
+   *
+   * 可见性判定属于**位置逻辑**，留在契约层。
+   */
+  visible: boolean;
 }
 
 /**
