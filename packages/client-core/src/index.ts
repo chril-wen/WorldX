@@ -154,6 +154,35 @@ export type {
 } from "./render/canvas2d/textures.js";
 
 /**
+ * 角色贴图集的**格子尺寸**从哪来。
+ *
+ * 格子大小**跟着图片尺寸走**（老图 170×204，新图 174×209）——
+ * 写死一个数会让贴图窗口错位，角色的脚会跑到头顶上。
+ *
+ * 生成器早就把真值写进 `metadata.json` 了，只是从来没人读。
+ */
+export {
+  characterMetadataUrl,
+  DEFAULT_SPRITE_COLUMNS,
+  DEFAULT_SPRITE_FRAME_HEIGHT,
+  DEFAULT_SPRITE_FRAME_WIDTH,
+  DEFAULT_SPRITE_ROWS,
+  defaultSpriteMetadataLoader,
+  deriveSpriteFrameSize,
+  loadCharacterSpriteFrameSize,
+  parseCharacterSpriteMetadata,
+  resolveSpriteFrameSize,
+} from "./render/sprite-metadata.js";
+export type {
+  CharacterFrameSizeLoaders,
+  CharacterSpriteMetadata,
+  SpriteFrameSize,
+  SpriteFrameSizeSources,
+  SpriteImageSizeLoader,
+  SpriteMetadataLoader,
+} from "./render/sprite-metadata.js";
+
+/**
  * 场景构建器 —— 把「世界状态」翻译成「要画什么」。
  *
  * **位置计算全在这里**（client-core），渲染实现只负责乘变换矩阵。

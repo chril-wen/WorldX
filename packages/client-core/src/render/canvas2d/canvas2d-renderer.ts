@@ -77,6 +77,12 @@ import {
   type Texture,
   type TextureSpec,
 } from "./textures.js";
+import {
+  defaultSpriteMetadataLoader,
+  resolveSpriteFrameSize,
+  type CharacterSpriteMetadata,
+  type SpriteMetadataLoader,
+} from "../sprite-metadata.js";
 
 /**
  * 渲染器用到的 2D 上下文**子集**。
@@ -173,6 +179,15 @@ export interface Canvas2DRendererOptions {
    */
   loadImage?: ImageLoader;
   /**
+   * 角色 `metadata.json` 的加载器 —— 「角色 id → 格子尺寸」。
+   *
+   * 贴图集的格子大小**跟着图片尺寸走**（老图 170×204，新图 174×209），
+   * 写死会让窗口错位（角色的脚会跑到头顶上）。
+   *
+   * 默认用浏览器的 `fetch`。单测注入假的。
+   */
+  loadSpriteMetadata?: SpriteMetadataLoader;
+  /**
    * 贴图来源表 —— 「source 字符串 → 去哪儿拿这张图」。
    *
    * 契约里的 `source` 是**不透明字符串**，渲染实现自己解释：
@@ -205,6 +220,7 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
   private ctx: Surface2D | null = null;
 
   private readonly loadImage: ImageLoader;
+  private readonly loadSpriteMetadataFile: SpriteMetadataLoader;
   private readonly textureSources: Record<string, TextureSpec>;
   private readonly dpr: number;
   private readonly createCanvas: CanvasFactory;
@@ -226,6 +242,8 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
 
   constructor(options: Canvas2DRendererOptions = {}) {
     this.loadImage = options.loadImage ?? defaultImageLoader;
+    this.loadSpriteMetadataFile =
+      options.loadSpriteMetadata ?? defaultSpriteMetadataLoader;
     this.textureSources = options.textureSources ?? {};
     this.dpr =
       options.devicePixelRatio ??
@@ -917,6 +935,16 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
    *
    * **加载是异步的**：第一次渲染时图还没到，画面上就是空的；
    * 图到了之后会调 `onTextureLoaded`（由外部接上「重画一帧」的钩子）。
+   *
+   * ## 格子大小是**查出来的**，不是写死的
+   *
+   * 角色贴图集是 6×5 的网格，但格子大小**跟着图片尺寸走**
+   * （老图 170×204，新图 174×209）。写死一个数会让窗口整体错位，
+   * 错到后来角色的脚会跑到头顶上。
+   *
+   * 所以这里按优先级查：
+   * 显式指定 > `metadata.json` > 按图算 > 兜底值。
+   * 详见 `sprite-metadata.ts`。
    */
   private ensureTexture(source: string, spec: TextureSpec | undefined): void {
     if (this.textures.has(source)) return;
@@ -925,17 +953,12 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
     const resolved = spec ?? this.resolveSpec(source);
     if (!resolved) return;
 
-    const promise = this.loadImage(resolved.url)
-      .then(({ image, width, height }) => {
+    const promise = this.loadTexture(source, resolved)
+      .then(({ image, width, height, frameWidth, frameHeight }) => {
         const frames =
-          resolved.frameWidth === undefined
+          frameWidth === undefined || frameHeight === undefined
             ? undefined
-            : buildSpriteSheetFrames(
-                width,
-                height,
-                resolved.frameWidth,
-                resolved.frameHeight ?? resolved.frameWidth,
-              );
+            : buildSpriteSheetFrames(width, height, frameWidth, frameHeight);
         this.textures.set(source, { image, width, height, frames });
         this.onTextureLoaded?.();
       })
@@ -948,6 +971,122 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
     promise.then(() => this.pending.delete(source));
   }
 
+  /**
+   * 加载一张贴图，**顺便定下它的格子大小**。
+   *
+   * 图片和 metadata **并行**取 —— metadata 只是一份小 JSON，
+   * 但它决定格子大小，不用等它就不能切帧。
+   */
+  private async loadTexture(
+    source: string,
+    resolved: TextureSpec,
+  ): Promise<{
+    image: CanvasImageSource;
+    width: number;
+    height: number;
+    frameWidth?: number;
+    frameHeight?: number;
+  }> {
+    const explicit =
+      resolved.frameWidth === undefined
+        ? null
+        : {
+            frameWidth: resolved.frameWidth,
+            frameHeight: resolved.frameHeight ?? resolved.frameWidth,
+          };
+
+    // 角色贴图才读 metadata —— 别的 source 没有这个文件。
+    const characterId = this.characterIdOf(source, resolved);
+    const isSpritesheet = explicit !== null || characterId !== null;
+
+    /**
+     * **不是贴图集就别切帧。**
+     *
+     * 底图（`world-base`）是一整张 8192×4608 的地图 ——
+     * 要是也按 6×5 切，它就被切成 30 块，画面直接崩。
+     */
+    if (!isSpritesheet) {
+      const image = await this.loadImage(resolved.url);
+      return {
+        image: image.image,
+        width: image.width,
+        height: image.height,
+      };
+    }
+
+    const metadataPromise = characterId
+      ? this.loadSpriteMetadata(characterId)
+      : Promise.resolve(null);
+
+    const [metadata, image] = await Promise.all([
+      metadataPromise,
+      this.loadImage(resolved.url),
+    ]);
+
+    const size = resolveSpriteFrameSize({
+      explicit,
+      metadata,
+      imageWidth: image.width,
+      imageHeight: image.height,
+      columns: metadata?.columns,
+      rows: metadata?.rows,
+    });
+
+    return {
+      image: image.image,
+      width: image.width,
+      height: image.height,
+      frameWidth: size.frameWidth,
+      frameHeight: size.frameHeight,
+    };
+  }
+
+  /** 这张贴图是不是某个角色的（是的话就知道去哪儿读 metadata）。 */
+  /**
+   * 这个 source 是不是角色贴图 —— 是的话去读它的 `metadata.json`。
+   *
+   * ## 为什么要**两个**条件
+   *
+   * 角色贴图的 key 是角色 id（`char_xxx`），但**光看 key 不够** ——
+   * 贴图来源表（`textureSources`）也可能把一个普通图片登记成角色。
+   *
+   * 所以：
+   *
+   * - key 以 `char_` 开头 → 是角色
+   * - URL 落在 `/assets/characters/.../spritesheet.png` → 是角色
+   * - 贴图来源表里**显式写了** `frameWidth` → 是贴图集（不管 key 叫什么）
+   *
+   * 三个条件**任一**成立就算 —— 宁可多读一份 metadata（读不到就回落到
+   * 显式值 / 按图算），也别把贴图集当成整张图画。
+   */
+  private characterIdOf(source: string, resolved: TextureSpec): string | null {
+    if (resolved.frameWidth !== undefined) {
+      // 显式写了格子大小 —— 但**角色 id** 还得从 URL 拿。
+      const match = /\/assets\/characters\/([^/]+)\/spritesheet\.png$/.exec(
+        resolved.url,
+      );
+      return match ? match[1] : null;
+    }
+    if (source.startsWith("char_")) {
+      return source;
+    }
+    const match = /\/assets\/characters\/([^/]+)\/spritesheet\.png$/.exec(
+      resolved.url,
+    );
+    return match ? match[1] : null;
+  }
+
+  /** 读角色的 `metadata.json`（读不到就当没有）。 */
+  private async loadSpriteMetadata(
+    characterId: string,
+  ): Promise<CharacterSpriteMetadata | null> {
+    try {
+      return await this.loadSpriteMetadataFile(characterId);
+    } catch {
+      return null;
+    }
+  }
+
   /** 贴图来源表里没有这个 key 时，按默认规则猜一个。 */
   private resolveSpec(source: string): TextureSpec | undefined {
     const known = this.textureSources[source];
@@ -956,8 +1095,9 @@ export class Canvas2DSceneRenderer implements SceneRenderer {
     if (source.startsWith("char_")) {
       return {
         url: `/assets/characters/${source}/spritesheet.png`,
-        frameWidth: 170,
-        frameHeight: 204,
+        // ⚠ **故意不写 frameWidth/frameHeight** ——
+        // 格子大小要现查（metadata / 按图算），写死会错位。
+        // 见 `sprite-metadata.ts` 的说明。
       };
     }
     return undefined;

@@ -53,6 +53,7 @@ import {
   MapManager,
   buildRenderScene,
   createCharacterDisplayMetrics,
+  loadCharacterSpriteFrameSize,
   type CharacterRenderState,
   type CameraState,
 } from "@own-world/client-core";
@@ -190,6 +191,14 @@ function diffBlocks(diff: Uint8ClampedArray, w: number, h: number): {
 class LegacyScene extends Phaser.Scene {
   characterIds: string[] = [];
   placements: Array<{ id: string; x: number; y: number }> = [];
+  /**
+   * 每个角色的格子大小。
+   *
+   * ⚠ **不能写死 170×204** —— 新贴图集是 1048×1048，真格子 174×209。
+   * 写死的话窗口会错位，角色的脚会跑到头顶上（两边一样错，
+   * A/B 比对就发现不了）。
+   */
+  frameSizes: Record<string, { frameWidth: number; frameHeight: number }> = {};
   mapWidth = 0;
   mapHeight = 0;
   sprites: Phaser.GameObjects.Sprite[] = [];
@@ -205,9 +214,10 @@ class LegacyScene extends Phaser.Scene {
   preload(): void {
     this.load.image("world-base", "/assets/map/06-background.png");
     for (const id of this.characterIds) {
+      const size = this.frameSizes[id] ?? { frameWidth: 170, frameHeight: 204 };
       this.load.spritesheet(id, `/assets/characters/${id}/spritesheet.png`, {
-        frameWidth: 170,
-        frameHeight: 204,
+        frameWidth: size.frameWidth,
+        frameHeight: size.frameHeight,
       });
     }
   }
@@ -300,11 +310,28 @@ async function main(): Promise<void> {
 
   abStats.characters = placements.length;
 
+  /* ── 格子大小（两边共用一份）─────────────────────────────── */
+
+  /**
+   * 每个角色的贴图格子大小。
+   *
+   * ⚠ **必须查，不能写死** —— 新贴图集是 1048×1048，真格子 174×209。
+   * 写死 170×204 会让窗口错位（脚跑到头顶上），
+   * 而且**两边一样错** → A/B 比对发现不了。
+   */
+  const frameSizes: Record<string, { frameWidth: number; frameHeight: number }> =
+    {};
+  for (const c of characters) {
+    const id = String(c.id);
+    frameSizes[id] = await loadCharacterSpriteFrameSize(id);
+  }
+
   /* ── 旧实现 ──────────────────────────────────────────────── */
 
   const legacyScene = new LegacyScene();
   legacyScene.characterIds = placements.map((p: { id: string }) => p.id);
   legacyScene.placements = placements;
+  legacyScene.frameSizes = frameSizes;
 
   const game = new Phaser.Game({
     type: Phaser.CANVAS,
