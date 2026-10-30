@@ -148,6 +148,24 @@ export interface ClientWorldTime extends GameTime {
   };
 }
 
+/**
+ * `WorldTimeInfo` —— `ClientWorldTime` 的**旧名字**。
+ *
+ * ## 为什么留这个别名
+ *
+ * 面板层现在用的是 `client/src/types/api.ts` 里的 `WorldTimeInfo`。
+ * 8.3 换契约时，那些 import 要改成 client-core 的名字。
+ *
+ * 而 `types/api.ts` **不动**（8.3 的验收标准之一）——
+ * 所以面板层里那些 `WorldTimeInfo` 的用法，**名字不变**才是最小改动。
+ *
+ * 契约起名 `ClientWorldTime` 是为了跟 core 的 `WorldTimeInfo` 区分
+ * （client 那份多了 `weather`）——
+ * 但两个名字指的是**同一个形状**（实测结构逐字相同），
+ * 所以这里给个别名，让面板层迁移时**只需要改 import 来源，不用改用法**。
+ */
+export type WorldTimeInfo = ClientWorldTime;
+
 /** 模拟状态。 */
 export type SimulationStatus =
   | "idle"

@@ -242,6 +242,20 @@ export type {
   WorldEventBus,
   WorldEventMap,
   WorldEventName,
+  WorldTimeInfo,
 } from "./render/events.js";
+
+/**
+ * `DialogueEventData` 从 core 转出。
+ *
+ * 面板层要用它给对话事件做类型收窄
+ * （`event.data as DialogueEventData`）——
+ * 而它**不是** client-core 自己的类型，是 core 的。
+ *
+ * 转出来是为了让面板层**只**依赖 client-core（不用再单独依赖 core）——
+ * 这是 8.3 的验收标准之一：
+ * 「新 UI 只依赖 `packages/client-core` + server API」。
+ */
+export type { DialogueEventData } from "@own-world/core/contracts/simulation.js";
 
 export { createWorldEventBus, worldEventBus } from "./render/event-bus.js";

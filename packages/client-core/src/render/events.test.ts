@@ -42,8 +42,10 @@ import { describe, expect, it } from "vitest";
 import type { SimulationEvent } from "@own-world/core/contracts/simulation.js";
 import type {
   ClientSimulationEvent,
+  ClientWorldTime,
   ReplayInitFrame,
   WorldEventMap,
+  WorldTimeInfo,
 } from "./events.js";
 
 /**
@@ -217,5 +219,34 @@ describe("WorldEventMap", () => {
     // `void` 意味着 emit 时**不能**带参数。
     const noPayload: WorldEventMap["camera_zoom_in"] = undefined;
     expect(noPayload).toBeUndefined();
+  });
+});
+
+describe("WorldTimeInfo 别名", () => {
+  /**
+   * `WorldTimeInfo` 是 `ClientWorldTime` 的别名 —— 指的是**同一个形状**。
+   *
+   * 面板层现在用的是 `types/api.ts` 里的 `WorldTimeInfo`，
+   * 而 `types/api.ts` **不动**（8.3 的验收标准）。
+   *
+   * 所以面板层迁移时要能**只改 import 来源、不改用法** ——
+   * 这就要求两个名字结构上完全一致。
+   */
+  it("和 ClientWorldTime 双向兼容", () => {
+    const a: ClientWorldTime = {
+      day: 1,
+      tick: 2,
+      timeString: "19:15",
+      period: "夜晚",
+      weather: { kind: "clear", label: "晴" },
+    };
+    const b: WorldTimeInfo = a;
+    const c: ClientWorldTime = b;
+    expect(c).toBe(a);
+  });
+
+  it("客户端的形状 —— weather 可选", () => {
+    const t: WorldTimeInfo = { day: 1, tick: 0, timeString: "08:00", period: "上午" };
+    expect(t.weather).toBeUndefined();
   });
 });
