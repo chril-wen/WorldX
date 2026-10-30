@@ -107,6 +107,7 @@ export type {
   DrawRect,
   DrawSprite,
   DrawText,
+  HitArea,
   OverlayItem,
   RenderLayer,
   RenderScene,
@@ -117,6 +118,40 @@ export {
   screenToWorld,
   worldToScreen,
 } from "./render/render-model.js";
+
+/**
+ * Canvas 2D 渲染实现 —— 阶段 8.2。
+ *
+ * 契约（`render-model.ts`）的**第一个**消费者。
+ *
+ * 导出的是**实现**，不是类型 —— 因为渲染实现是**可换的**：
+ * 换栈的时候只要还实现 `SceneRenderer`，上层一行都不用改。
+ */
+export {
+  Canvas2DSceneRenderer,
+} from "./render/canvas2d/canvas2d-renderer.js";
+export type {
+  Canvas2DRendererOptions,
+  CanvasFactory,
+  Surface2D,
+  SurfaceCanvas,
+} from "./render/canvas2d/canvas2d-renderer.js";
+
+export {
+  DomOverlayRenderer,
+} from "./render/canvas2d/dom-overlays.js";
+export type { OverlayRendererOptions } from "./render/canvas2d/dom-overlays.js";
+
+export {
+  buildSpriteSheetFrames,
+  defaultImageLoader,
+} from "./render/canvas2d/textures.js";
+export type {
+  ImageLoader,
+  Texture,
+  TextureFrame,
+  TextureSpec,
+} from "./render/canvas2d/textures.js";
 
 /**
  * 场景构建器 —— 把「世界状态」翻译成「要画什么」。
