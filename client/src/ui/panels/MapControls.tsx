@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import Phaser from "phaser";
+import type { WorldEventBus } from "@own-world/client-core";
 
 interface CameraState {
   x: number;
@@ -20,7 +20,7 @@ export function MapControls({
   eventBus,
   presentationMode = false,
 }: {
-  eventBus: Phaser.Events.EventEmitter;
+  eventBus: WorldEventBus;
   presentationMode?: boolean;
 }) {
   const { t } = useTranslation();

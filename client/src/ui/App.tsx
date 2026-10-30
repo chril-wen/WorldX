@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { createPortal } from "react-dom";
-import Phaser from "phaser";
+import type { WorldEventBus } from "@own-world/client-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TopBar } from "./panels/TopBar";
 import { SidePanel } from "./panels/SidePanel";
@@ -43,7 +43,7 @@ class OverlayErrorBoundary extends Component<
   render() { return this.state.hasError ? null : this.props.children; }
 }
 
-export function App({ eventBus }: { eventBus: Phaser.Events.EventEmitter }) {
+export function App({ eventBus }: { eventBus: WorldEventBus }) {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -53,7 +53,7 @@ export function App({ eventBus }: { eventBus: Phaser.Events.EventEmitter }) {
   );
 }
 
-function AppContent({ eventBus }: { eventBus: Phaser.Events.EventEmitter }) {
+function AppContent({ eventBus }: { eventBus: WorldEventBus }) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
