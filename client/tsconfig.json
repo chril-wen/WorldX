@@ -1,8 +1,8 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
+    "baseUrl": ".",
+    "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
       "@server-types": ["../server/src/types"],
