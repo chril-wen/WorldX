@@ -1,16 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import type { WorldEventBus } from "@own-world/client-core";
-
-interface CameraState {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  zoom: number;
-  mapWidth: number;
-  mapHeight: number;
-}
+import type { CameraStatePayload, WorldEventBus } from "@own-world/client-core";
 
 const MINI_W = 200;
 const MINI_W_COMPACT = 160;
@@ -28,7 +18,7 @@ export function MapControls({
   const [zoom, setZoom] = useState(1);
   const [showHint, setShowHint] = useState(!presentationMode);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const camRef = useRef<CameraState>({ x: 0, y: 0, width: 1024, height: 768, zoom: 1, mapWidth: 8192, mapHeight: 4608 });
+  const camRef = useRef<CameraStatePayload>({ x: 0, y: 0, width: 1024, height: 768, zoom: 1, mapWidth: 8192, mapHeight: 4608 });
   const rafRef = useRef(0);
   const miniHRef = useRef(Math.round(miniWidth * (4608 / 8192)));
   const miniMapImageRef = useRef<HTMLImageElement | null>(null);
@@ -39,7 +29,7 @@ export function MapControls({
 
   useEffect(() => {
     const onZoom = (z: number) => setZoom(z);
-    const onCamState = (s: CameraState) => {
+    const onCamState = (s: CameraStatePayload) => {
       camRef.current = s;
       if (s.mapWidth > 0 && s.mapHeight > 0) {
         miniHRef.current = Math.round(miniWidth * (s.mapHeight / s.mapWidth));

@@ -3,7 +3,13 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { createPortal } from "react-dom";
-import type { WorldEventBus } from "@own-world/client-core";
+import type {
+  ClientSimulationEvent,
+  DialogueEventData,
+  SimulationStatus,
+  WorldEventBus,
+  WorldTimeInfo,
+} from "@own-world/client-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TopBar } from "./panels/TopBar";
 import { SidePanel } from "./panels/SidePanel";
@@ -14,7 +20,6 @@ import { WorldIntroBanner } from "./panels/WorldIntroBanner";
 import { Timeline } from "./pages/Timeline";
 import { CreateWorldPage } from "./pages/CreateWorldPage";
 import { CreateWorldBackground } from "./pages/CreateWorldBackground";
-import type { SimulationEvent, DialogueEventData, WorldTimeInfo } from "../types/api";
 import { apiClient } from "./services/api-client";
 import type { GeneratedWorldSummary, WorldInfo } from "./services/api-client";
 
@@ -72,13 +77,13 @@ function AppContent({ eventBus }: { eventBus: WorldEventBus }) {
   const [worldInfo, setWorldInfo] = useState<WorldInfo | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
   const [followedCharId, setFollowedCharId] = useState<string | null>(null);
-  const [events, setEvents] = useState<SimulationEvent[]>([]);
-  const [simStatus, setSimStatus] = useState<"idle" | "running" | "pausing" | "paused" | "error">("idle");
+  const [events, setEvents] = useState<ClientSimulationEvent[]>([]);
+  const [simStatus, setSimStatus] = useState<SimulationStatus>("idle");
   const [autoPlayEnabled, setAutoPlayEnabled] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayProgress, setReplayProgress] = useState<{ current: number; total: number } | null>(null);
-  const [dialogueEvents, setDialogueEvents] = useState<SimulationEvent[]>([]);
+  const [dialogueEvents, setDialogueEvents] = useState<ClientSimulationEvent[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const lastTimelineKeyRef = useRef<string | null>(null);
   const [transitionPhase, setTransitionPhase] = useState<"hidden" | "ending" | "starting" | "fade-out">("hidden");
@@ -284,13 +289,13 @@ function AppContent({ eventBus }: { eventBus: WorldEventBus }) {
   useEffect(() => {
     const onTimeUpdate = (time: WorldTimeInfo) => setGameTime(time);
     const onCharClick = (id: string) => setSelectedCharId(id);
-    const onSimEvent = (event: SimulationEvent) => {
+    const onSimEvent = (event: ClientSimulationEvent) => {
       setEvents((prev) => [event, ...prev].slice(0, 50));
     };
-    const onSimStatus = (payload: { status?: "idle" | "running" | "pausing" | "paused" | "error" }) => {
+    const onSimStatus = (payload: { status?: SimulationStatus }) => {
       if (payload.status) setSimStatus(payload.status);
     };
-    const onDialogue = (event: SimulationEvent) => {
+    const onDialogue = (event: ClientSimulationEvent) => {
       const dialogue = event.data as DialogueEventData | undefined;
       if (dialogue?.conversationId) {
         setDismissedIds((prev) => {
