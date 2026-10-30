@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OWN-World —— 渲染预览台</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root { --top-ui-offset: 52px; }
+      body {
+        overflow: hidden;
+        background: #070819;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+      /* 跟 client/index.html **逐字一致** 的布局：
+         画布和 DOM 覆盖层都往下挪 `--top-ui-offset`，
+         两者共用同一块坐标系 —— 名牌才不会跟角色错位。 */
+      #stage {
+        position: absolute;
+        top: var(--top-ui-offset);
+        left: 0;
+        width: 100%;
+        height: calc(100% - var(--top-ui-offset));
+      }
+      #stage canvas { display: block; width: 100%; height: 100%; }
+      #label-root {
+        position: absolute;
+        top: var(--top-ui-offset);
+        left: 0;
+        width: 100%;
+        height: calc(100% - var(--top-ui-offset));
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 2;
+      }
+      #stats {
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        z-index: 10;
+        max-width: 420px;
+        max-height: 60vh;
+        overflow: auto;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #9fe8a0;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+      /* 名牌样式 —— 逐字搬自 client/index.html */
+      .character-label {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        transform: translate(-50%, -100%);
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+      }
+      .character-label__name-row { display: flex; align-items: center; gap: 3px; }
+      .character-label__name {
+        color: #ffffff;
+        font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.05;
+        text-shadow:
+          0 1px 0 rgba(0, 0, 0, 0.95),
+          0 0 6px rgba(0, 0, 0, 0.75),
+          0 0 12px rgba(0, 0, 0, 0.35);
+      }
+      .character-label__icon {
+        font-size: 15px;
+        line-height: 1;
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+      }
+      .character-label__action-pill {
+        margin-top: 5px;
+        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.88);
+        color: #4b556b;
+        border-radius: 999px;
+        font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+        max-width: 150px;
+        text-align: center;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.3;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview-root"></div>
+    <script type="module" src="/src/preview/render-preview.ts"></script>
+  </body>
+</html>

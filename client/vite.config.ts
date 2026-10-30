@@ -33,6 +33,24 @@ export default defineConfig({
       },
     },
   },
+  /**
+   * 预览台 —— 阶段 8.2 的浏览器验收页。
+   *
+   * `preview.html` 是**独立**的入口（不走 `index.html`）——
+   * 它不启动 Phaser，只挂新的 Canvas 2D 渲染器。
+   *
+   * 这样「旧实现」和「新实现」可以在同一个 server 上分别看，
+   * 互不干扰。
+   */
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        preview: path.resolve(__dirname, "preview.html"),
+        ab: path.resolve(__dirname, "ab.html"),
+      },
+    },
+  },
   esbuild: {
     jsx: "automatic",
     jsxImportSource: "react",

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OWN-World —— 渲染 A/B 像素比对</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        overflow: hidden;
+        background: #070819;
+        color: #9fe8a0;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+      #ab-root { position: relative; width: 100vw; height: 100vh; }
+      .ab-stage {
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+      .ab-stage canvas { display: block; }
+      #ab-stats {
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        z-index: 100;
+        max-width: 460px;
+        max-height: 70vh;
+        overflow: auto;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.82);
+        font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+      #ab-legend {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        z-index: 100;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.72);
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #cfe9ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ab-root">
+      <div id="ab-legend">
+        左：旧 Phaser（Canvas 渲染器）<br />
+        右：新 Canvas 2D 渲染器<br />
+        底部：差异（红色 = 不一致）
+      </div>
+      <pre id="ab-stats"></pre>
+    </div>
+    <script type="module" src="/src/preview/ab-diff.ts"></script>
+  </body>
+</html>
