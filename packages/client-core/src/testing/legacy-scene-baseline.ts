@@ -194,6 +194,17 @@ export type LegacySceneBaseline =
       /** 改造前的 `getCharacterColor`。 */
       getCharacterColor: (index: number) => number;
       /**
+       * 改造前的 `MapManager`（门面，指向现在的 client-core）。
+       *
+       * 阶段 5 搬完之后，改造前的 `client/src/systems/MapManager.ts`
+       * 就只是一行 re-export —— 所以它跟新实现是**同一份**。
+       *
+       * 这不是「用新实现给自己当基准」：
+       * 阶段 5 的 A/B 对比已经证明它跟阶段 5 之前的 client MapManager 逐点相等。
+       * 8.1 关心的是**渲染层**，不是地图数据层。
+       */
+      MapManager: new () => any;
+      /**
        * 设置**替身**的文字测量方式。
        *
        * ## 为什么必须暴露它
@@ -303,6 +314,10 @@ export async function loadLegacySceneBaseline(): Promise<LegacySceneBaseline> {
       pathToFileURL(path.join(extracted.dir, "phaser-stub.ts")).href,
       import.meta.url,
     );
+    const mapMod = await tsImport(
+      pathToFileURL(path.join(extracted.dir, "MapManager.ts")).href,
+      import.meta.url,
+    );
     cached = {
       ok: true,
       WorldScene: sceneMod.WorldScene,
@@ -311,6 +326,7 @@ export async function loadLegacySceneBaseline(): Promise<LegacySceneBaseline> {
       actionToEmoji: configMod.actionToEmoji,
       getCharacterColor: configMod.getCharacterColor,
       setStubTextMeasurer: stubMod.setStubTextMeasurer,
+      MapManager: mapMod.MapManager,
     };
   } catch (err) {
     cached = { ok: false, reason: `加载基准失败：${(err as Error).message}` };
