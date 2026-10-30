@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { WorldEventBus } from "@own-world/client-core";
 import { apiClient } from "../ui/services/api-client";
 import type {
   GameTime,
@@ -51,7 +52,25 @@ export class PlaybackController extends Phaser.Events.EventEmitter {
   private replayNextDueAt = 0;
   private replayTickStartedAt = 0;
 
-  constructor(private globalEventBus: Phaser.Events.EventEmitter) {
+  /**
+   * 全局事件总线 —— 契约的 `WorldEventBus`。
+   *
+   * ## 这个类**自己**还继承 Phaser 的 `EventEmitter`
+   *
+   * 因为它有**两条通道**：
+   *
+   * | 通道 | 用途 | 归谁管 |
+   * |---|---|---|
+   * | `this.emit("event", …)` | **类内部**信号，通知「有个模拟事件要播了」 | 还是 Phaser |
+   * | `this.globalEventBus.emit(…)` | **全局**事件，面板层也听 | 契约 |
+   *
+   * 内部那条**只有一个消费者**（`WorldScene`），而且用的是
+   * `on(event, fn, context)` 三参数形式 —— 契约接口没有 context。
+   *
+   * 留着 Phaser 的继承是**刻意的**：内部通道不在契约范围内，
+   * 8.4 才下线旧 Phaser 层。现在动它只会增加风险，不增加价值。
+   */
+  constructor(private globalEventBus: WorldEventBus) {
     super();
   }
 

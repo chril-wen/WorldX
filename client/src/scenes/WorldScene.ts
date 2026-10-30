@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { WorldEventBus } from "@own-world/client-core";
 import { EventBus } from "../EventBus";
 import { MapManager } from "../systems/MapManager";
 import { PathfindingManager } from "../systems/PathfindingManager";
@@ -33,7 +34,7 @@ export class WorldScene extends Phaser.Scene {
   private characterSprites: Map<string, CharacterSprite> = new Map();
   private playbackController!: PlaybackController;
   private cameraController!: CameraController;
-  private eventBus!: Phaser.Events.EventEmitter;
+  private eventBus!: WorldEventBus;
   private entityLayer!: Phaser.GameObjects.Container;
   private dialoguePlaybackLanes: Map<string, DialoguePlaybackLane> = new Map();
   private dialogueEventChain: Promise<void> = Promise.resolve();
