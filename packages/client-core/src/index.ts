@@ -86,3 +86,46 @@ export type {
  * 值相同，注释里还互相声明「是同一个值」。
  */
 export { DEFAULT_CENTER_LOCATION_ID } from "@own-world/core/contracts/world.js";
+
+/**
+ * 渲染契约 —— 阶段 8 的「要画什么」和「说什么」。
+ *
+ * **只导出类型，不导出实现** —— 这一层是纯契约，
+ * 渲染实现（Canvas 2D / Pixi / SVG）各自实现 `SceneRenderer`，
+ * 只依赖这里定义的类型。
+ *
+ * 导出的是**类型**，所以对客户端 bundle 体积的影响是零
+ * （TS 的 `export type` 在编译后不留任何运行时代码）。
+ */
+export type {
+  CameraState,
+  DrawEllipse,
+  DrawImage,
+  DrawItem,
+  DrawPolygon,
+  DrawPolyline,
+  DrawRect,
+  DrawSprite,
+  DrawText,
+  OverlayItem,
+  RenderLayer,
+  RenderScene,
+  SceneRenderer,
+} from "./render/render-model.js";
+
+export {
+  screenToWorld,
+  worldToScreen,
+} from "./render/render-model.js";
+
+export type {
+  CameraStatePayload,
+  CharacterSummary,
+  ClientWorldTime,
+  PlaybackMode,
+  ReplayInitFrame,
+  SimulationStatus,
+  WorldEventBus,
+  WorldEventMap,
+  WorldEventName,
+} from "./render/events.js";
