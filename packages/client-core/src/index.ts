@@ -243,3 +243,5 @@ export type {
   WorldEventMap,
   WorldEventName,
 } from "./render/events.js";
+
+export { createWorldEventBus, worldEventBus } from "./render/event-bus.js";

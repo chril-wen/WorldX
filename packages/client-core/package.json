@@ -27,6 +27,7 @@
     "easystarjs": "^0.4.4"
   },
   "devDependencies": {
-    "@types/node": "^22.20.5"
+    "@types/node": "^22.20.5",
+    "eventemitter3": "^5.0.4"
   }
 }
