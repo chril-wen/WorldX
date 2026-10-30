@@ -46,19 +46,87 @@
  *
  * ## 载荷里的类型从哪来
  *
- * `SimulationEvent` / `DialogueEventData` 直接用 `@own-world/core` 的 ——
- * 那是**引擎的真实类型**，客户端拿到的就是它。
+ * `ClientSimulationEvent` 用的是**客户端真正收到的事件形状** ——
+ * 不是 `@own-world/core` 的 `SimulationEvent`。
  *
- * `WorldTimeInfo` 用 core 的 `time-helpers` 那一份，
- * 不是 client 自己抄的（client 侧 `types/api.ts` 那份是**扩展版**，
- * 多了 `weather`）。
+ * ## 为什么不用 core 的 `SimulationEvent`
+ *
+ * 8.0 定契约时，这里直接用了 core 的 `SimulationEvent`。
+ * 8.3 换事件时实测发现：**两者不是同一份东西**。
+ *
+ * 扫了 `output/worlds` 下所有时间线的 `events.jsonl`（**332 个真实事件**），
+ * 字段只有这些：
+ *
+ * ```
+ * id / gameDay / gameTick / type / location / data / tags
+ * actorId / targetId / dramScore / innerMonologue
+ * ```
+ *
+ * 对比 core 的 `SimulationEvent`：
+ *
+ * | 字段 | core | 客户端实际 |
+ * |---|---|---|
+ * | `tags` | 有 | 有 |
+ * | `timeString` / `period` | **无** | **有** —— server 的 `enrichEventTime` 补的 |
+ * | `createdAt` | **无** | 类型上**要求有**，运行时**从来没有** |
+ * | `location` | 必填 | 可缺 |
+ * | `type` | `SimEventType` 枚举 | `string` |
+ *
+ * `createdAt` 那个字段是**假的必填** —— server 的事件表
+ * （`server/src/store/event-store.ts` 的 `INSERT_SQL`）
+ * **根本没有 `created_at` 这一列**。
+ * `types/api.ts` 里写成了 `createdAt: string`（必填），
+ * UI 里 `Date.parse(event.createdAt)` 拿到的其实是 `undefined`，
+ * 靠 `|| absTick` 兜底才没炸。
+ *
+ * 所以这里定义**客户端形状**，而不是 core 的引擎形状 ——
+ * 契约描述的应该是**线上真正在传的东西**。
+ *
+ * `ClientWorldTime` 同理：用 core 的 `time-helpers` 那份
+ * （`GameTime` 逐字相同），不是 client 自己抄的
+ * （client 侧 `types/api.ts` 那份是**扩展版**，多了 `weather`）。
  */
 
-import type {
-  DialogueEventData,
-  SimulationEvent,
-} from "@own-world/core/contracts/simulation.js";
+import type { DialogueEventData } from "@own-world/core/contracts/simulation.js";
 import type { GameTime, WeatherKind } from "@own-world/core/contracts/world.js";
+
+/**
+ * 客户端收到的事件 —— **线上真正在传的那份形状**。
+ *
+ * ## 为什么 `createdAt` 是必填但运行时没有
+ *
+ * 这是**故意跟 `types/api.ts` 保持一致**的。
+ *
+ * 改��可选会在 8.3 造成一大片连锁修改（面板层好几十处 `event.createdAt`），
+ * 而运行时它**本来就是 `undefined`** —— 类型改不改，行为一模一样。
+ *
+ * 真正的修法是**先让 server 补上 `created_at` 这一列**，
+ * 那时这个字段才有意义。现在先不动 ——
+ * 类型上必填，是为了跟 `types/api.ts` 对齐，接缝期不引入连锁改动。
+ */
+export interface ClientSimulationEvent {
+  id: string;
+  /** 事件类型。运行时是普通字符串（`action_start`、`dialogue`…）。 */
+  type: string;
+  gameDay: number;
+  gameTick: number;
+  /** 场景内时刻，如 `"19:15"` —— server 的 `enrichEventTime` 补的。 */
+  timeString?: string;
+  /** 时段标签，如 `"夜晚"` —— server 的 `enrichEventTime` 补的。 */
+  period?: string;
+  actorId?: string;
+  targetId?: string;
+  /** 事件发生的地点。 */
+  location?: string;
+  /** 事件载荷。对话事件里是 `DialogueEventData`。 */
+  data: any | DialogueEventData;
+  innerMonologue?: string;
+  dramScore?: number;
+  /** ⚠ 类型上必填，运行时**从来没有**（见上面的说明）。 */
+  createdAt: string;
+  /** 事件标签，core 那边是必填。 */
+  tags?: string[];
+}
 
 /**
  * 世界时间 —— 客户端看到的时间。
@@ -113,8 +181,27 @@ export interface CharacterSummary {
   mainAreaPointId: string | null;
 }
 
-/** 回放初始化帧 —— `replay_init` 事件的载荷。 */
+/**
+ * 回放初始化帧 —— `replay_init` 事件的载荷。
+ *
+ * ## 为什么带 `type: "init"`
+ *
+ * 运行时发的是**时间线文件里的整帧**（`events.jsonl` 的第一行），
+ * 判别字段是它的一部分。实测真实数据：
+ *
+ * ```
+ * { type: "init", gameTime: { day: 1, tick: 0 }, characters: [...] }
+ * ```
+ *
+ * 8.0 定契约时把这个字段**漏掉了** —— 但 `PlaybackController`
+ * 是整个帧原样转发（`emit("replay_init", initFrame)`），
+ * 所以运行时**一直带着**它。
+ *
+ * 补上它，接收方才能靠 `type` 判别这是 init 帧而不是 tick 帧。
+ */
 export interface ReplayInitFrame {
+  /** 判别字段 —— 固定是 `"init"`。 */
+  type: "init";
   gameTime: GameTime;
   characters: CharacterSummary[];
 }
@@ -155,11 +242,11 @@ export interface WorldEventMap {
   // ── 模拟事件（系统 → 面板）──────────────────────────────
 
   /** 一个模拟事件（所有类型）。 */
-  sim_event: SimulationEvent;
-  /** 对话事件。载荷是 `SimulationEvent`，对话内容在 `data` 里。 */
-  dialogue: SimulationEvent;
+  sim_event: ClientSimulationEvent;
+  /** 对话事件。载荷是 `ClientSimulationEvent`，对话内容在 `data` 里。 */
+  dialogue: ClientSimulationEvent;
   /** 世界级事件（`event_triggered`）。 */
-  global_event: SimulationEvent;
+  global_event: ClientSimulationEvent;
 
   // ── 角色与相机（双向）──────────────────────────────────
 

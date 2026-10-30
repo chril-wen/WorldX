@@ -234,6 +234,7 @@ export type { CharacterDisplayMetrics } from "./render/character-metrics.js";
 export type {
   CameraStatePayload,
   CharacterSummary,
+  ClientSimulationEvent,
   ClientWorldTime,
   PlaybackMode,
   ReplayInitFrame,
